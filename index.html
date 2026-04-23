@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마피아 웹게임: 사이버 수사 스릴러</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* ==========================================
+           사이버펑크 테마 및 애니메이션 CSS
+           ========================================== */
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body { 
+            background-color: #050505; color: #e0e0e0; 
+            font-family: 'Share Tech Mono', 'Courier New', monospace; 
+            background-image: radial-gradient(circle at 50% 50%, #111 0%, #000 100%); 
+            overflow-x: hidden; user-select: none;
+        }
+        ::-webkit-scrollbar { width: 6px; } 
+        ::-webkit-scrollbar-track { background: #050505; } 
+        ::-webkit-scrollbar-thumb { background: #008b8b; border-radius: 3px; }
+
+        .glass-panel { 
+            background: rgba(10, 15, 20, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); 
+            border: 1px solid rgba(0, 255, 255, 0.15); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); 
+        }
+
+        .neon-text-blue { text-shadow: 0 0 5px #0ff, 0 0 10px #0ff, 0 0 20px #00b3ff; color: #ccffff; }
+        .neon-text-red { text-shadow: 0 0 5px #f00, 0 0 10px #f00, 0 0 20px #ff0040; color: #ffcccc; }
+        
+        /* 테마별 동적 컬러 */
+        .theme-MAFIA { border-color: rgba(255, 0, 0, 0.4) !important; box-shadow: inset 0 0 20px rgba(255,0,0,0.1) !important; }
+        .theme-CITIZEN { border-color: rgba(0, 255, 255, 0.4) !important; box-shadow: inset 0 0 20px rgba(0,255,255,0.05) !important; }
+        .theme-NEUTRAL { border-color: rgba(245, 158, 11, 0.4) !important; box-shadow: inset 0 0 20px rgba(245,158,11,0.1) !important; }
+
+        .nixie-font { font-family: 'Impact', sans-serif; letter-spacing: 0.1em; }
+        .chat-msg { animation: fadeIn 0.3s ease-out; }
+        
+        /* 글리치 애니메이션 */
+        .glitch-hover:hover { animation: glitch-skew 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite; background-color: rgba(0, 255, 255, 0.2); }
+        .glitch-anim { animation: glitch-skew 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+        @keyframes glitch-skew { 0% { transform: skew(0deg); } 20% { transform: skew(-5deg); filter: hue-rotate(90deg); } 40% { transform: skew(5deg); } 60% { transform: skew(-2deg); } 80% { transform: skew(2deg); filter: hue-rotate(-90deg); } 100% { transform: skew(0deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 포섭 발생 시 핏빛 화면 오버레이 */
+        #vfx-overlay { pointer-events: none; position: fixed; inset: 0; z-index: 9999; opacity: 0; transition: opacity 0.1s; }
+        .blood-screen {
+            background: radial-gradient(circle, transparent 20%, rgba(150, 0, 0, 0.8) 90%, rgba(255, 0, 0, 0.9) 100%);
+            box-shadow: inset 0 0 100px rgba(255, 0, 0, 0.8);
+            animation: screenShake 0.5s cubic-bezier(.36,.07,.19,.97) both, bloodFade 4s ease-out forwards;
+        }
+        .glass-crack {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 11px), 
+                              repeating-linear-gradient(-45deg, transparent, transparent 20px, rgba(255,0,0,0.2) 20px, rgba(255,0,0,0.2) 22px);
+        }
+        @keyframes screenShake { 10%, 90% { transform: translate3d(-5px, 0, 0) scale(1.02); } 20%, 80% { transform: translate3d(5px, 0, 0) scale(1.02); } 30%, 50%, 70% { transform: translate3d(-10px, 10px, 0) scale(1.05); } 40%, 60% { transform: translate3d(10px, -10px, 0) scale(1.05); } }
+        @keyframes bloodFade { 0% { opacity: 1; filter: contrast(200%) brightness(150%); } 10% { opacity: 0.8; } 100% { opacity: 0; display: none; } }
+        
+        /* 타겟 호버 이펙트 */
+        .target-hover-mafia:hover { box-shadow: inset 0 0 0 2px #f00; cursor: crosshair; }
+        .target-hover-police:hover { box-shadow: inset 0 0 0 2px #0ff; cursor: cell; }
+        .target-hover-doctor:hover { box-shadow: inset 0 0 0 2px #0f0; cursor: pointer; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-2 lg:p-4">
+
+    <!-- 시각 효과 오버레이 -->
+    <div id="vfx-overlay"></div>
+
+    <div id="app" class="w-full max-w-7xl h-[95vh] flex flex-col justify-center transition-all duration-500">
+        <div class="glass-panel p-10 rounded-xl text-center max-w-lg mx-auto text-cyan-200">
+            <h2 class="text-xl font-bold mb-4 animate-pulse">SYSTEM BOOTING...</h2>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, getDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================
+        // 0. 사이버펑크 오디오 엔진 (Web Audio API)
+        // ==========================================
+        const CyberAudio = {
+            ctx: null,
+            init: function() { 
+                if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            playTone: function(freq, type, duration, vol, detune=0) {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime); osc.detune.value = detune;
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + duration);
+            },
+            playClick: function() { this.playTone(800, 'square', 0.05, 0.1); },
+            playError: function() { this.playTone(150, 'sawtooth', 0.2, 0.2); this.playTone(100, 'sawtooth', 0.3, 0.2, 100); },
+            playScan: function() { this.playTone(1200, 'sine', 0.1, 0.05); setTimeout(()=>this.playTone(2400, 'sine', 0.2, 0.05), 100); },
+            playGunshot: function() { // 묵직한 소음기 소리
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(100, this.ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); osc.stop(this.ctx.currentTime + 0.3);
+            },
+            playGlassCrack: function() { // 굉음 및 노이즈
+                if(!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.5; // 0.5 seconds of noise
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = this.ctx.createBufferSource(); noise.buffer = buffer;
+                const gain = this.ctx.createGain(); gain.gain.setValueAtTime(0.8, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+                noise.connect(gain); gain.connect(this.ctx.destination); noise.start();
+                
+                // 쿵쾅거리는 심장 박동
+                setTimeout(() => this.playTone(50, 'sine', 0.4, 1), 500);
+                setTimeout(() => this.playTone(50, 'sine', 0.4, 1), 900);
+            }
+        };
+
+        // ==========================================
+        // 1. 직업 데이터베이스 (기획안 V5.0)
+        // ==========================================
+        const ROLES_DB = {
+            BOSS: { id: 'BOSS', name: '보스', faction: 'MAFIA', type: 'MAFIA', desc: '시민 1명을 킬러로 포섭합니다. (연속 사용 불가) 스캔 시 시민으로 위장됩니다.', actionName: '포섭 시도' },
+            HACKER: { id: 'HACKER', name: '해커', faction: 'MAFIA', type: 'MAFIA', desc: '조사직(경찰 등)의 시스템 메시지를 훔쳐봅니다.', actionName: '정보 해킹' },
+            KILLER: { id: 'KILLER', name: '킬러', faction: 'MAFIA', type: 'MAFIA', desc: '매일 밤 유저 1명을 제거합니다. (포섭으로 생성됨)', actionName: '살해' },
+            GAMBLER: { id: 'GAMBLER', name: '도박꾼', faction: 'NEUTRAL', type: 'NEUTRAL', desc: '사망자를 예측하여 다음 날 밤 무작위 정보를 얻습니다.', actionName: '사망 베팅' },
+            LAWYER: { id: 'LAWYER', name: '변호사', faction: 'NEUTRAL', type: 'NEUTRAL', desc: '의뢰인 혹은 타겟을 보호하여 조사를 시민으로 왜곡합니다.', actionName: '비밀 유지' },
+            POLICE: { id: 'POLICE', name: '경찰', faction: 'CITIZEN', type: 'INFO', desc: '유저 1명이 마피아인지 스캔합니다.', actionName: '정체 스캔' },
+            DOCTOR: { id: 'DOCTOR', name: '의사', faction: 'CITIZEN', type: 'DEFENSE', desc: '유저 1명을 살해로부터 응급 치료합니다.', actionName: '응급 처치' },
+            JOBSEEKER: { id: 'JOBSEEKER', name: '취업준비생', faction: 'CITIZEN', type: 'DEFENSE', desc: '포섭된 자의 원래 직업을 즉시 계승합니다. (자동 발동)' },
+            POLITICIAN: { id: 'POLITICIAN', name: '정치인', faction: 'CITIZEN', type: 'VAR', desc: '투표권 2개, 낮 처형 면제권을 가집니다. (패시브)' },
+            ARCHIVIST: { id: 'ARCHIVIST', name: '기록관', faction: 'CITIZEN', type: 'INFO', desc: '유저 1명의 과거 동선을 확인합니다.', actionName: '기록 열람' },
+            SOLDIER: { id: 'SOLDIER', name: '군인', faction: 'CITIZEN', type: 'DEFENSE', desc: '경계 대상을 보호하거나 본인 습격 시 1회 생존합니다.', actionName: '초소 경계' },
+            DETECTIVE: { id: 'DETECTIVE', name: '탐정', faction: 'CITIZEN', type: 'INFO', desc: '유저 2명의 관계 기류를 파악합니다.', actionName: '관계 분석' },
+            SHAMAN: { id: 'SHAMAN', name: '무당', faction: 'CITIZEN', type: 'INFO', desc: '낮에 사망자 1명의 직업을 확인합니다.', actionName: '혼령 교신' },
+            WATCHMAN: { id: 'WATCHMAN', name: '감시자', faction: 'CITIZEN', type: 'INFO', desc: '유저 1명의 밤 행동 대상자 로그를 확인합니다.', actionName: '정밀 관측' },
+            CITIZEN: { id: 'CITIZEN', name: '시민', faction: 'CITIZEN', type: 'BASIC', desc: '특수 능력이 없는 평범한 시민입니다.' }
+        };
+
+        function getRolePool(count) {
+            const pools = {
+                6: ['BOSS', 'GAMBLER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'POLITICIAN'],
+                7: ['BOSS', 'LAWYER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'ARCHIVIST', 'SOLDIER'],
+                8: ['BOSS', 'HACKER', 'GAMBLER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'DETECTIVE', 'POLITICIAN'],
+                9: ['BOSS', 'HACKER', 'LAWYER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'ARCHIVIST', 'SHAMAN', 'WATCHMAN'],
+                10: ['BOSS', 'HACKER', 'LAWYER', 'GAMBLER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'SOLDIER', 'DETECTIVE', 'POLITICIAN'],
+                11: ['BOSS', 'HACKER', 'LAWYER', 'GAMBLER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'ARCHIVIST', 'WATCHMAN', 'SHAMAN', 'SOLDIER'],
+                12: ['BOSS', 'HACKER', 'LAWYER', 'GAMBLER', 'POLICE', 'DOCTOR', 'JOBSEEKER', 'ARCHIVIST', 'DETECTIVE', 'WATCHMAN', 'SOLDIER', 'POLITICIAN'],
+                13: ['BOSS', 'HACKER', 'LAWYER', 'GAMBLER', 'POLICE', 'DETECTIVE', 'WATCHMAN', 'SHAMAN', 'ARCHIVIST', 'DOCTOR', 'SOLDIER', 'JOBSEEKER', 'POLITICIAN']
+            };
+            return pools[count] || Array(count).fill('CITIZEN');
+        }
+
+        // ==========================================
+        // 2. 파이어베이스 초기화 및 전역 상태
+        // ==========================================
+        let isLocalMock = false; let app, auth, db, appId;
+
+        try {
+            let config = null;
+            if (typeof __firebase_config !== 'undefined') config = JSON.parse(__firebase_config);
+            if (!config || Object.keys(config).length === 0) throw new Error("No Config");
+            app = initializeApp(config); auth = getAuth(app); db = getFirestore(app);
+            appId = typeof __app_id !== 'undefined' ? __app_id : 'mafia-v5';
+        } catch (e) { isLocalMock = true; console.log("로컬 가상 모드로 가동됩니다."); }
+
+        let state = 'INIT';
+        let currentUser = null;
+        let currentRoomId = new URLSearchParams(window.location.search).get('room');
+        let roomData = null;
+        
+        let timerInterval = null;
+        let isTransitioning = false;
+        let currentChatTab = 'ALL'; 
+        let previousRole = null; // 포섭 이벤트 감지용
+
+        const appDiv = document.getElementById('app');
+        const vfxDiv = document.getElementById('vfx-overlay');
+
+        window.showToast = (msg, color = 'text-cyan-200 border-cyan-500/50') => {
+            const toast = document.createElement('div');
+            toast.className = `glass-panel ${color} px-6 py-3 rounded shadow-lg border text-sm transition-opacity z-50`;
+            toast.innerText = `> SYSTEM: ${msg}`;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+        };
+
+        // 시각 효과 트리거 함수
+        function triggerGlitch(elementId) {
+            const el = document.getElementById(elementId);
+            if(el) { el.classList.remove('glitch-anim'); void el.offsetWidth; el.classList.add('glitch-anim'); }
+        }
+
+        // 대망의 포섭(Recruit) 연출
+        function triggerRecruitVFX() {
+            CyberAudio.playGlassCrack();
+            vfxDiv.className = 'blood-screen glass-crack';
+            vfxDiv.style.opacity = '1';
+            setTimeout(() => { vfxDiv.style.opacity = '0'; vfxDiv.className = ''; }, 4000);
+        }
+
+        async function authenticate() {
+            if (isLocalMock) return;
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+            else await signInAnonymously(auth);
+        }
+
+        async function joinRoom(nickname) {
+            if (isLocalMock) {
+                currentRoomId = "LOCAL_HQ"; currentUser = { uid: "local_user_01" };
+                roomData = { status: 'lobby', hostId: "local_user_01", players: { "local_user_01": { nickname: nickname, joinedAt: Date.now(), isHost: true, isAlive: true } }, messages: [], votes: {}, actions: {} };
+                state = 'LOBBY'; render(); showToast("UI 전용 모드 접속 성공"); return;
+            }
+
+            if (!currentUser) return;
+            if (!currentRoomId) { currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase(); window.history.pushState({}, '', `?room=${currentRoomId}`); }
+
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
+            const roomSnap = await getDoc(roomRef);
+            const playerData = { nickname, joinedAt: Date.now(), isHost: false, isAlive: true };
+
+            if (!roomSnap.exists()) {
+                playerData.isHost = true;
+                await setDoc(roomRef, { status: 'lobby', hostId: currentUser.uid, createdAt: Date.now(), players: { [currentUser.uid]: playerData }, messages: [], votes: {}, actions: {} });
+            } else {
+                const payload = {}; payload[`players.${currentUser.uid}`] = playerData; await updateDoc(roomRef, payload);
+            }
+
+            onSnapshot(roomRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const prevStatus = roomData?.status;
+                    roomData = data;
+                    if (!roomData.messages) roomData.messages = [];
+                    if (!roomData.votes) roomData.votes = {};
+                    if (!roomData.actions) roomData.actions = {};
+                    
+                    // 페이즈 전환 효과음
+                    if (roomData.status === 'playing' && prevStatus === 'lobby') { state = 'PLAYING'; CyberAudio.playScan(); }
+                    if (roomData.status === 'end' && prevStatus === 'playing') { state = 'END'; CyberAudio.playTone(400, 'sawtooth', 1, 0.2); }
+                    
+                    render();
+                    
+                    // [VFX 로직] 내 역할이 시민에서 킬러로 변했는지 감지 (포섭)
+                    if (state === 'PLAYING' && roomData.players[currentUser.uid]) {
+                        const currentRole = roomData.players[currentUser.uid].role;
+                        if (previousRole && previousRole !== 'KILLER' && currentRole === 'KILLER') {
+                            triggerRecruitVFX();
+                        }
+                        previousRole = currentRole;
+                    }
+
+                    setTimeout(() => { const chatBox = document.getElementById('chat-box'); if(chatBox) chatBox.scrollTop = chatBox.scrollHeight; }, 50);
+                }
+            });
+            state = 'LOBBY'; render();
+        }
+
+        // [추가] 방장 설정 동기화
+        window.updateSettings = async () => {
+            if (roomData.hostId !== currentUser.uid) return;
+            const maxPlayers = parseInt(document.getElementById('setting-max-players').value) || 13;
+            const dayTime = parseInt(document.getElementById('setting-day-time').value) || 60;
+            const nightTime = parseInt(document.getElementById('setting-night-time').value) || 45;
+            const settings = { maxPlayers, dayTime, nightTime };
+            if (isLocalMock) { roomData.settings = settings; render(); }
+            else { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), { settings }); }
+        };
+
+        // [추가] 봇 추가 로직
+        window.addBot = async () => {
+            CyberAudio.playClick();
+            if (roomData.hostId !== currentUser.uid) return;
+            const maxP = roomData.settings?.maxPlayers || 13;
+            if (Object.keys(roomData.players).length >= maxP) {
+                showToast(`최대 참가 인원(${maxP}명)에 도달했습니다.`, "border-red-500 text-red-300");
+                return;
+            }
+            const botNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
+            const existingNames = Object.values(roomData.players).map(p => p.nickname);
+            let bName = "Bot_" + Math.floor(Math.random()*1000);
+            for(let n of botNames) { if(!existingNames.includes(n + "_Bot")) { bName = n + "_Bot"; break; } }
+            
+            const botId = 'bot_' + Math.random().toString(36).substr(2, 6);
+            const botData = { nickname: bName, joinedAt: Date.now(), isHost: false, isAlive: true, isBot: true };
+            
+            if (isLocalMock) { roomData.players[botId] = botData; render(); }
+            else { 
+                const payload = {}; payload[`players.${botId}`] = botData;
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), payload);
+            }
+        };
+
+        // ==========================================
+        // 3. 게임 엔진 (야간 행동 및 로직 처리)
+        // ==========================================
+        window.startGame = async () => {
+            CyberAudio.playClick();
+            if (isLocalMock && Object.keys(roomData.players).length < 6) {
+                const names = ["Alpha_Bot", "Beta_Bot", "Gamma_Bot", "Delta_Bot", "Epsilon_Bot", "Zeta_Bot", "Eta_Bot"];
+                for(let i=0; i<7; i++) {
+                    if (!roomData.players[`bot_${i}`]) {
+                        roomData.players[`bot_${i}`] = { nickname: names[i], joinedAt: Date.now()+i, isHost: false, isAlive: true, isBot: true };
+                    }
+                }
+            }
+            const uids = Object.keys(roomData.players);
+            if (uids.length < 6 && !isLocalMock) { CyberAudio.playError(); return showToast("최소 6명의 요원이 필요합니다.", "border-red-500 text-red-300"); }
+
+            const roleIds = getRolePool(Math.min(uids.length, 13));
+            uids.sort(() => Math.random() - 0.5); roleIds.sort(() => Math.random() - 0.5);
+
+            const updatedPlayers = { ...roomData.players };
+            uids.forEach((uid, i) => { updatedPlayers[uid].role = roleIds[i] || 'CITIZEN'; updatedPlayers[uid].isAlive = true; });
+
+            const dayTime = roomData.settings?.dayTime || 60; // [추가] 설정된 시간 적용
+
+            const initialGameState = {
+                status: 'playing', phase: 'day', dayCount: 1, phaseEndTime: Date.now() + (dayTime * 1000), 
+                players: updatedPlayers, votes: {}, actions: {},
+                messages: [{ type: 'SYSTEM', text: `[ SYSTEM 시작 ] 1일차 토론이 시작되었습니다. 마피아를 색출하십시오.`, timestamp: Date.now() }]
+            };
+
+            if (isLocalMock) { Object.assign(roomData, initialGameState); state = 'PLAYING'; previousRole = updatedPlayers[currentUser.uid].role; render(); } 
+            else await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), initialGameState);
+        };
+
+        window.sendChat = async () => {
+            const input = document.getElementById('chat-input'); const text = input.value.trim();
+            if(!text || !roomData.players[currentUser.uid].isAlive) return;
+            CyberAudio.playClick();
+            let type = currentChatTab; if(type === 'SYSTEM') type = 'ALL';
+            if(type === 'FACTION' && ROLES_DB[roomData.players[currentUser.uid].role].faction !== 'MAFIA') type = 'ALL';
+            const msg = { senderId: currentUser.uid, senderName: roomData.players[currentUser.uid].nickname, text, type, timestamp: Date.now() };
+            input.value = '';
+            if(isLocalMock) { roomData.messages.push(msg); triggerGlitch('app'); render(); }
+            else await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), { messages: arrayUnion(msg) });
+        };
+        window.setChatTab = (tab) => { CyberAudio.playClick(); currentChatTab = tab; render(); };
+
+        window.castVote = async (targetId) => {
+            CyberAudio.playClick();
+            if (roomData.phase !== 'day' || !roomData.players[currentUser.uid].isAlive) return showToast("현재 투표 불가");
+            if (currentUser.uid === targetId) return showToast("자신 투표 불가");
+            if (isLocalMock) { roomData.votes[currentUser.uid] = targetId; render(); }
+            else { const payload = {}; payload[`votes.${currentUser.uid}`] = targetId; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), payload); }
+        };
+
+        window.selectActionTarget = (targetId) => {
+            if (roomData.phase !== 'night' || !roomData.players[currentUser.uid].isAlive) return;
+            CyberAudio.playScan();
+            if(!window.localActionCache) window.localActionCache = {};
+            
+            const myRole = ROLES_DB[roomData.players[currentUser.uid].role];
+            if(myRole.id === 'DETECTIVE') {
+                if(!window.localActionCache.t1) { window.localActionCache.t1 = targetId; showToast("첫 번째 타겟 설정 완료. 두 번째를 선택하세요."); }
+                else if(window.localActionCache.t1 !== targetId) { window.localActionCache.t2 = targetId; submitAction(window.localActionCache.t1, window.localActionCache.t2); window.localActionCache = {}; }
+            } else {
+                submitAction(targetId, null);
+            }
+            render();
+        }
+
+        async function submitAction(t1, t2) {
+            CyberAudio.playGunshot();
+            showToast("생체 스캔 확정. 행동이 시스템에 전송되었습니다.", "border-green-500 text-green-300");
+            const actionData = { role: roomData.players[currentUser.uid].role, target: t1, target2: t2 };
+            if (isLocalMock) { roomData.actions[currentUser.uid] = actionData; render(); }
+            else { const payload = {}; payload[`actions.${currentUser.uid}`] = actionData; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), payload); }
+        }
+
+        window.skipPhase = async () => {
+            if(roomData.hostId !== currentUser.uid) return;
+            CyberAudio.playError();
+            if(isLocalMock) roomData.phaseEndTime = Date.now();
+            else await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), { phaseEndTime: Date.now() });
+        };
+
+        function startTimerDisplay() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if(!roomData || roomData.status !== 'playing' || !roomData.phaseEndTime) return;
+                const remain = Math.max(0, roomData.phaseEndTime - Date.now());
+                const secs = Math.floor(remain / 1000); const ms = Math.floor((remain % 1000) / 10);
+                const tEl = document.getElementById('game-timer'); const mEl = document.getElementById('game-ms');
+                if(tEl) tEl.innerText = secs.toString().padStart(2, '0'); if(mEl) mEl.innerText = ms.toString().padStart(2, '0');
+                
+                if (remain <= 5000 && remain > 4900 && roomData.phase === 'day') CyberAudio.playTone(800, 'sawtooth', 0.1, 0.1); // 5초 카운트다운 틱
+                
+                if (remain === 0 && roomData.hostId === currentUser.uid && !isTransitioning) {
+                    isTransitioning = true; processPhaseEnd();
+                }
+            }, 50);
+        }
+
+        // =========================================================
+        // 방장이 처리하는 페이즈 전환 및 밤 6단계 엔진
+        // =========================================================
+        async function processPhaseEnd() {
+            let payload = {}; let newMsgs = []; let privateMsgs = [];
+            let newPhase = roomData.phase === 'day' ? 'night' : 'day';
+            let newDay = roomData.phase === 'day' ? roomData.dayCount : roomData.dayCount + 1;
+            
+            // [수정] 방장 권한으로 봇 시뮬레이션 (배포판 포함)
+            const aliveBots = Object.keys(roomData.players).filter(uid => uid !== currentUser.uid && roomData.players[uid].isAlive && (roomData.players[uid].isBot || (isLocalMock && uid.startsWith('bot_'))));
+            if (roomData.phase === 'day' && roomData.votes[currentUser.uid]) {
+                aliveBots.forEach(uid => roomData.votes[uid] = roomData.votes[currentUser.uid]);
+            } else if (roomData.phase === 'night') {
+                aliveBots.forEach(uid => {
+                    const botRole = roomData.players[uid].role;
+                    if(ROLES_DB[botRole].actionName) {
+                        const rTarget = Object.keys(roomData.players)[Math.floor(Math.random() * Object.keys(roomData.players).length)];
+                        if (!roomData.actions) roomData.actions = {};
+                        roomData.actions[uid] = { role: botRole, target: rTarget };
+                    }
+                });
+            }
+
+            const tempPlayers = JSON.parse(JSON.stringify(roomData.players));
+            const getFactionKr = (r) => ({ 'CITIZEN': '시민 진영', 'MAFIA': '마피아 진영', 'NEUTRAL': '중립 세력' }[ROLES_DB[r].faction]);
+
+            if (roomData.phase === 'day') {
+                const alive = Object.values(tempPlayers).filter(p => p.isAlive);
+                const counts = {};
+                for (const [vid, tid] of Object.entries(roomData.votes || {})) counts[tid] = (counts[tid] || 0) + (tempPlayers[vid].role === 'POLITICIAN' ? 2 : 1);
+                
+                let maxV = 0; let execId = null; let tie = false;
+                for (const [tid, c] of Object.entries(counts)) {
+                    if(c > maxV) { maxV = c; execId = tid; tie = false; } else if(c === maxV) { tie = true; }
+                }
+                const majority = Math.floor(alive.length / 2) + 1;
+                newMsgs.push({ type: 'SYSTEM', text: `=== 낮 투표 집계 결과 ===`, timestamp: Date.now() });
+                
+                if (execId && !tie && maxV >= majority) {
+                    if (tempPlayers[execId].role === 'POLITICIAN') {
+                        newMsgs.push({ type: 'SYSTEM', text: `[면제] ${tempPlayers[execId].nickname}님이 최다 득표나, 정치인 특권으로 생존했습니다.`, timestamp: Date.now() });
+                    } else {
+                        tempPlayers[execId].isAlive = false;
+                        newMsgs.push({ type: 'SYSTEM', text: `[처형] 과반수 득표로 [${getFactionKr(tempPlayers[execId].role)}] ${tempPlayers[execId].nickname}님이 처형되었습니다.`, timestamp: Date.now() });
+                    }
+                } else {
+                    newMsgs.push({ type: 'SYSTEM', text: `[부결] 과반수 득표자가 없어 아무도 처형되지 않았습니다.`, timestamp: Date.now() });
+                }
+                payload['votes'] = {}; 
+            } 
+            else {
+                const acts = roomData.actions || {};
+                let isKillLocked = false; let healedId = null; let guardedId = null; let maskedId = null;
+                let murderVictims = []; let attackerId = null; let recruitTargetId = null;
+
+                for (const [uid, act] of Object.entries(acts)) {
+                    if (act.role === 'BOSS' && act.target && tempPlayers[act.target].isAlive) {
+                        const tRole = ROLES_DB[tempPlayers[act.target].role];
+                        if (tRole.faction === 'CITIZEN' && tRole.id !== 'KILLER') {
+                            recruitTargetId = act.target; isKillLocked = true;
+                            privateMsgs.push({ receiverId: act.target, type: 'SYSTEM', text: `[CRITICAL WARNING] 시스템 강제 오버라이드. 당신은 보스에게 포섭되었습니다. 직업이 [킬러]로 변이합니다.`, timestamp: Date.now() });
+                            
+                            let jobSeekerId = Object.keys(tempPlayers).find(k => tempPlayers[k].role === 'JOBSEEKER' && tempPlayers[k].isAlive);
+                            if (jobSeekerId && !roomData.firstRecruitDone) {
+                                const oldRole = tempPlayers[act.target].role; tempPlayers[jobSeekerId].role = oldRole; 
+                                privateMsgs.push({ receiverId: jobSeekerId, type: 'SYSTEM', text: `[승계 발동] 포섭된 요원의 유지를 이어받아, 당신의 직업이 [${ROLES_DB[oldRole].name}]로 변경되었습니다.`, timestamp: Date.now() });
+                                payload['firstRecruitDone'] = true;
+                            }
+                            tempPlayers[act.target].role = 'KILLER'; break; 
+                        }
+                    }
+                }
+
+                for (const [uid, act] of Object.entries(acts)) {
+                    if (act.role === 'DOCTOR') healedId = act.target;
+                    if (act.role === 'SOLDIER') guardedId = act.target;
+                    if (act.role === 'LAWYER') maskedId = act.target;
+                    if (act.role === 'KILLER' || act.role === 'BOSS') attackerId = uid;
+                }
+
+                let hackerLogs = [];
+                for (const [uid, act] of Object.entries(acts)) {
+                    const target = tempPlayers[act.target]; if (!target) continue;
+                    let logText = "";
+                    if (act.role === 'POLICE') {
+                        let isMafia = (ROLES_DB[target.role].faction === 'MAFIA');
+                        if (target.role === 'BOSS' || act.target === maskedId) isMafia = false;
+                        logText = `[스캔 결과] ${target.nickname} 요원은 [${isMafia ? '마피아' : '시민'}] 입니다.`;
+                        privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: logText, timestamp: Date.now() });
+                        hackerLogs.push(`[해킹] 경찰 스캔 기록: ${logText}`);
+                    }
+                    if (act.role === 'DETECTIVE' && act.target2) {
+                        const t2 = tempPlayers[act.target2]; let result = '[동맹]'; 
+                        if (ROLES_DB[target.role].faction !== ROLES_DB[t2.role].faction) result = '[대립]';
+                        if (target.role === 'BOSS' || t2.role === 'BOSS') result = '[경계]';
+                        logText = `[관계 분석] ${target.nickname}와 ${t2.nickname} 사이의 기류는 ${result} 입니다.`;
+                        privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: logText, timestamp: Date.now() });
+                        hackerLogs.push(`[해킹] 탐정 분석 기록: ${logText}`);
+                    }
+                    if (act.role === 'WATCHMAN') {
+                        let visitors = Object.keys(acts).filter(k => k !== uid && acts[k].target === act.target).map(k => tempPlayers[k].nickname);
+                        logText = `[CCTV 기록] 밤사이 ${target.nickname} 요원에게 접근한 자: ${visitors.length ? visitors.join(', ') : '없음'}`;
+                        privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: logText, timestamp: Date.now() });
+                        hackerLogs.push(`[해킹] 감시자 기록: ${logText}`);
+                    }
+                }
+                
+                for (const [uid, act] of Object.entries(acts)) {
+                    if (act.role === 'HACKER' && hackerLogs.length > 0) privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: hackerLogs[0], timestamp: Date.now() });
+                }
+
+                if (!isKillLocked) {
+                    for (const [uid, act] of Object.entries(acts)) {
+                        if (act.role === 'KILLER' || (act.role === 'BOSS' && !Object.values(tempPlayers).some(p => p.role === 'KILLER' && p.isAlive))) {
+                            if (act.target && act.target !== healedId && act.target !== guardedId) {
+                                tempPlayers[act.target].isAlive = false; murderVictims.push(act.target);
+                            } else if (act.target === guardedId) {
+                                privateMsgs.push({ receiverId: guardedId, type: 'SYSTEM', text: `[경계 방어] 당신의 초소에 마피아가 침입했으나 격퇴했습니다!`, timestamp: Date.now() });
+                            }
+                        }
+                    }
+                }
+
+                newMsgs.push({ type: 'SYSTEM', text: `=== 밤이 지나고 아침이 밝았습니다 ===`, timestamp: Date.now() });
+                if (recruitTargetId) newMsgs.push({ type: 'SYSTEM', text: `[WARNING] 간밤에 누군가 불길한 굉음과 함께 끔찍한 괴물로 변이했습니다...`, timestamp: Date.now() });
+                
+                if (murderVictims.length > 0) {
+                    murderVictims.forEach(v => newMsgs.push({ type: 'SYSTEM', text: `[살해] 밤사이 [${getFactionKr(tempPlayers[v].role)}] ${tempPlayers[v].nickname} 요원이 마피아에게 무참히 살해당했습니다.`, timestamp: Date.now() }));
+                } else {
+                    newMsgs.push({ type: 'SYSTEM', text: `[평온] 지난밤엔 아무런 사상자도 발생하지 않았습니다.`, timestamp: Date.now() });
+                }
+                payload['actions'] = {}; 
+            }
+
+            for(let k in tempPlayers) { payload[`players.${k}.isAlive`] = tempPlayers[k].isAlive; payload[`players.${k}.role`] = tempPlayers[k].role; }
+            
+            const aliveArr = Object.values(tempPlayers).filter(p => p.isAlive);
+            const mCnt = aliveArr.filter(p => ROLES_DB[p.role]?.faction === 'MAFIA').length;
+            const cCnt = aliveArr.filter(p => ROLES_DB[p.role]?.faction === 'CITIZEN').length;
+            const nCnt = aliveArr.filter(p => ROLES_DB[p.role]?.faction === 'NEUTRAL').length;
+
+            let isGameOver = false; let winner = null;
+            if (mCnt === 0) { isGameOver = true; winner = 'CITIZEN'; } 
+            else if (mCnt >= cCnt + nCnt || cCnt === 0) { isGameOver = true; winner = 'MAFIA'; }
+
+            if (isGameOver) {
+                payload['status'] = 'end'; payload['winner'] = winner; payload['phaseEndTime'] = null;
+                newMsgs.push({ type: 'SYSTEM', text: `★★★ 게임 종료! [${winner === 'MAFIA' ? '마피아' : '시민'}] 진영의 최종 승리입니다! ★★★`, timestamp: Date.now() });
+            } else {
+                const dayTime = roomData.settings?.dayTime || 60;
+                const nightTime = roomData.settings?.nightTime || 45;
+                payload['phase'] = newPhase; payload['dayCount'] = newDay;
+                payload['phaseEndTime'] = Date.now() + (newPhase === 'day' ? dayTime * 1000 : nightTime * 1000);
+                newMsgs.push({ type: 'SYSTEM', text: `[ ${newDay}일차 ${newPhase === 'day' ? '낮' : '밤'} ] 페이즈가 전환되었습니다.`, timestamp: Date.now() });
+            }
+
+            if (isLocalMock) { 
+                if (payload.status === 'end') state = 'END';
+                for(const key in payload) {
+                    if(key.includes('.')) { const parts = key.split('.'); roomData[parts[0]][parts[1]][parts[2]] = payload[key]; }
+                    else roomData[key] = payload[key];
+                }
+                roomData.messages.push(...newMsgs); roomData.messages.push(...privateMsgs); 
+                isTransitioning = false; render(); 
+            } else {
+                if(newMsgs.length > 0) payload['messages'] = arrayUnion(...newMsgs, ...privateMsgs);
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), payload);
+                isTransitioning = false;
+            }
+        }
+
+        // ==========================================
+        // 4. 화면 렌더링 엔진 (UI 복구 및 테마 적용)
+        // ==========================================
+        window.copyInviteLink = () => {
+            CyberAudio.playClick();
+            const url = window.location.href; const temp = document.createElement("input");
+            document.body.appendChild(temp); temp.value = url; temp.select(); document.execCommand("copy"); document.body.removeChild(temp);
+            showToast("보안 회선 링크가 복사되었습니다. 요원들을 초대하세요.");
+        };
+
+        function render() {
+            appDiv.innerHTML = '';
+            if (state === 'INIT') {
+                appDiv.innerHTML = `
+                    <div class="glass-panel p-10 rounded-xl text-center max-w-lg mx-auto flex flex-col items-center">
+                        <div class="mb-4 animate-pulse"><svg class="w-16 h-16 text-cyan-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path></svg></div>
+                        <h1 class="text-4xl font-bold neon-text-blue mb-2 tracking-wider">CYBER MAFIA</h1>
+                        <p class="text-cyan-500/70 text-xs mb-10 tracking-widest">[ SYSTEM VERSION 5.0 ]</p>
+                        <button id="btn-init" class="w-full bg-cyan-950/50 hover:bg-cyan-900 border border-cyan-500 text-cyan-100 py-4 rounded glitch-hover font-bold transition-all tracking-widest">SYSTEM OVERRIDE : 사운드 켜고 입장</button>
+                    </div>`;
+                document.getElementById('btn-init').addEventListener('click', async () => { CyberAudio.init(); CyberAudio.playClick(); document.getElementById('btn-init').innerText = "인증 프로토콜 가동 중..."; await authenticate(); state = 'LOGIN'; render(); });
+            } else if (state === 'LOGIN') {
+                appDiv.innerHTML = `
+                    <div class="glass-panel p-10 rounded-xl max-w-md mx-auto">
+                        <div class="border-b border-cyan-800 pb-4 mb-8">
+                            <h2 class="text-xl font-bold text-cyan-200 tracking-widest uppercase">Identity Verification</h2>
+                            <p class="text-xs text-cyan-600 mt-1">접속자 신원 확인 절차</p>
+                        </div>
+                        <div class="mb-6">
+                            <label class="block text-cyan-500 text-xs mb-2 tracking-widest">코드네임 (NICKNAME)</label>
+                            <input type="text" id="nickname-input" class="w-full bg-gray-900/80 border border-cyan-800 rounded px-4 py-3 text-cyan-100 focus:outline-none focus:border-cyan-400" placeholder="요원명을 입력하세요" maxlength="10">
+                        </div>
+                        <button id="btn-join" class="w-full bg-cyan-900/60 hover:bg-cyan-800 border border-cyan-500 text-cyan-100 py-3 rounded glitch-hover font-bold transition-all tracking-widest mt-4">CONNECT TO NETWORK</button>
+                    </div>`;
+                document.getElementById('btn-join').addEventListener('click', () => { CyberAudio.playClick(); const n = document.getElementById('nickname-input').value.trim(); if(n) joinRoom(n); else showToast("코드네임을 입력해야 합니다."); });
+            } else if (state === 'LOBBY' && roomData) {
+                // [복구됨] 화려한 1단계 대기실 UI 복구
+                const playersArray = Object.entries(roomData.players || {}).map(([uid, data]) => ({uid, ...data})).sort((a,b)=>a.joinedAt-b.joinedAt);
+                const isAmIHost = roomData.hostId === currentUser.uid;
+                const playerCount = playersArray.length;
+
+                let playersHtml = playersArray.map(p => `
+                    <div class="glass-panel flex items-center justify-between p-4 rounded border-l-4 ${p.uid === roomData.hostId ? 'border-amber-500' : 'border-cyan-600'} hover:bg-gray-800/50 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded bg-gray-800 flex items-center justify-center border border-gray-600"><svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>
+                            <div>
+                                <p class="text-cyan-100 font-bold tracking-wide">${p.nickname} ${p.uid === currentUser.uid ? '<span class="text-xs text-cyan-500">(나)</span>' : ''}</p>
+                                <p class="text-xs text-gray-500 mt-1 uppercase">${p.uid === roomData.hostId ? '★ HOST (통제관)' : 'AGENT (요원)'}</p>
+                            </div>
+                        </div>
+                        <div class="text-xs text-green-400 animate-pulse tracking-widest">ONLINE</div>
+                    </div>`).join('');
+
+                const emptySlotsCount = Math.max(0, 6 - playerCount);
+                for(let i=0; i<emptySlotsCount; i++) playersHtml += `<div class="glass-panel opacity-50 flex items-center p-4 rounded border border-dashed border-cyan-900 bg-black/20"><div class="w-10 h-10 rounded bg-gray-900 border border-gray-700 mr-3"></div><div class="text-gray-600 text-sm tracking-widest">WAITING FOR SIGNAL...</div></div>`;
+
+                appDiv.innerHTML = `
+                    <div class="w-full flex flex-col gap-6 max-h-full transition-opacity duration-500" id="lobby-view">
+                        <div class="glass-panel w-full p-6 rounded-xl flex justify-between items-center border-b-2 border-cyan-500">
+                            <div>
+                                <h2 class="text-2xl font-bold neon-text-blue tracking-widest">COMMAND CENTER <span class="text-sm text-cyan-600 ml-2">대기실</span></h2>
+                                <p class="text-cyan-400 text-sm mt-2 font-mono flex items-center gap-2">ROOM ID: <span class="text-white font-bold tracking-widest">${currentRoomId}</span> <button onclick="copyInviteLink()" class="ml-2 bg-cyan-900/50 hover:bg-cyan-700 text-xs py-1 px-2 rounded border border-cyan-600">초대 링크 복사</button></p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-gray-400 text-xs mb-1 tracking-widest">CONNECTED AGENTS</div>
+                                <div class="text-3xl font-bold text-cyan-300 nixie-font">${playerCount} <span class="text-lg text-cyan-700">/ 13</span></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+                            <div class="md:col-span-2 flex flex-col gap-3 overflow-y-auto pr-2" style="max-h: 60vh;">${playersHtml}</div>
+                            <div class="glass-panel p-6 rounded-xl border-t-2 border-amber-600 flex flex-col justify-between">
+                                <div>
+                                    <h3 class="text-amber-500 font-bold tracking-widest mb-4">HOST CONTROLS</h3>
+                                    <div class="space-y-4">
+                                        <!-- [추가] 인원 설정, 타이머 설정, 봇 추가 패널 -->
+                                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                                            <div class="flex justify-between items-center mb-2">
+                                                <p class="text-xs text-gray-400">참가 인원 설정</p>
+                                                <select id="setting-max-players" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" ${!isAmIHost ? 'disabled' : ''} onchange="updateSettings()">
+                                                    ${[6,7,8,9,10,11,12,13].map(n => `<option value="${n}" ${(roomData.settings?.maxPlayers || 13) == n ? 'selected' : ''}>최대 ${n}명</option>`).join('')}
+                                                </select>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <p class="text-sm text-gray-200">현재 <span class="${playerCount >= 6 ? 'text-green-400' : 'text-red-400'} font-bold">${playerCount}</span>명 접속</p>
+                                                ${isAmIHost ? `<button onclick="addBot()" class="bg-cyan-900/60 hover:bg-cyan-700 border border-cyan-600 text-xs text-white px-3 py-1.5 rounded transition-colors flex items-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg> 봇 추가</button>` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                                            <p class="text-xs text-gray-400 mb-2">낮/밤 타이머 설정 (초)</p>
+                                            <div class="flex gap-2">
+                                                <div class="flex-1"><label class="text-[10px] text-cyan-500 block mb-1">낮 (토론)</label><input type="number" id="setting-day-time" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" value="${roomData.settings?.dayTime || 60}" ${!isAmIHost ? 'disabled' : ''} onchange="updateSettings()"></div>
+                                                <div class="flex-1"><label class="text-[10px] text-purple-500 block mb-1">밤 (행동)</label><input type="number" id="setting-night-time" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" value="${roomData.settings?.nightTime || 45}" ${!isAmIHost ? 'disabled' : ''} onchange="updateSettings()"></div>
+                                            </div>
+                                        </div>
+                                        <div class="bg-black/40 p-2 rounded border border-gray-800 flex justify-between">
+                                            <p class="text-xs text-gray-400">예상 배분표</p>
+                                            <p class="text-xs text-cyan-300">${playerCount < 6 && !isLocalMock ? '인원 부족' : 'M(1) N(1) C(4+) 무작위 생성'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-6">
+                                    ${isAmIHost ? `<button onclick="startGame()" class="w-full py-4 rounded font-bold tracking-widest transition-all ${playerCount >= 6 || isLocalMock ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_15px_rgba(217,119,6,0.6)]' : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'}" ${playerCount >= 6 || isLocalMock ? '' : 'disabled'}>INITIATE OPERATION (시작)</button>` : `<div class="w-full py-4 rounded font-bold tracking-widest text-center bg-gray-800 border border-gray-700 text-gray-400">HOST 대기 중...</div>`}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            } else if ((state === 'PLAYING' || state === 'END') && roomData) {
+                // [최종본] 메인 게임 UI
+                const myData = roomData.players[currentUser.uid];
+                const myRole = ROLES_DB[myData.role];
+                const isDay = roomData.phase === 'day';
+                const themeClass = `theme-${myRole.faction}`;
+                const isMyHost = roomData.hostId === currentUser.uid;
+
+                const votesReceived = {};
+                for(let vId in roomData.votes) {
+                    const tId = roomData.votes[vId]; votesReceived[tId] = (votesReceived[tId] || 0) + (roomData.players[vId].role === 'POLITICIAN' ? 2 : 1);
+                }
+                const myVoteTarget = roomData.votes[currentUser.uid];
+                
+                // 마피아/조사직을 위한 호버 CSS 클래스 매핑
+                let hoverClass = '';
+                if(!isDay && myData.isAlive) {
+                    if(myRole.faction === 'MAFIA') hoverClass = 'target-hover-mafia';
+                    else if(myRole.type === 'INFO') hoverClass = 'target-hover-police';
+                    else if(myRole.type === 'DEFENSE') hoverClass = 'target-hover-doctor';
+                }
+
+                const gridHtml = Object.entries(roomData.players).map(([uid, p]) => `
+                    <div onclick="${isDay ? `castVote('${uid}')` : `selectActionTarget('${uid}')`}" class="relative glass-panel p-3 rounded-lg border flex items-center justify-between transition-all ${!p.isAlive ? 'opacity-40 grayscale' : (myVoteTarget===uid ? 'border-amber-500 bg-amber-900/20' : 'border-gray-700 hover:border-cyan-500')} ${p.isAlive ? hoverClass : ''}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-gray-900 border ${!p.isAlive ? 'border-red-900' : 'border-cyan-900'} rounded flex items-center justify-center">
+                                ${!p.isAlive ? '<span class="text-red-500 font-bold text-xs">DEAD</span>' : '<span class="text-gray-500 text-[10px]">CCTV</span>'}
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-200">${p.nickname} ${uid === currentUser.uid ? '<span class="text-cyan-500 text-xs">(나)</span>' : ''}</p>
+                                ${votesReceived[uid] && isDay && p.isAlive ? `<p class="text-xs text-amber-400 font-bold animate-pulse">▲ ${votesReceived[uid]}표 지목됨</p>` : ''}
+                            </div>
+                        </div>
+                        ${myVoteTarget === uid && isDay ? `<div class="text-amber-500"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg></div>` : ''}
+                    </div>
+                `).join('');
+
+                const msgsHtml = (roomData.messages || []).filter(m => {
+                    if (m.receiverId && m.receiverId !== currentUser.uid) return false; 
+                    if (currentChatTab === 'ALL') return m.type === 'ALL' || m.type === 'SYSTEM';
+                    if (currentChatTab === 'SYSTEM') return m.type === 'SYSTEM';
+                    if (currentChatTab === 'FACTION') return m.type === 'FACTION' || m.type === 'SYSTEM';
+                    return true;
+                }).map(m => {
+                    if(m.type === 'SYSTEM') return `<div class="chat-msg text-amber-300 text-xs my-2 px-2 py-1 bg-amber-900/20 border-l-2 border-amber-500 glitch-anim">${m.receiverId ? '<span class="text-cyan-300 font-bold">[개인 수신] </span>' : ''}${m.text}</div>`;
+                    if(m.type === 'FACTION') return `<div class="chat-msg text-red-300 text-sm my-1"><span class="font-bold text-red-500">[마피아] ${m.senderName}:</span> ${m.text}</div>`;
+                    return `<div class="chat-msg text-gray-200 text-sm my-1"><span class="font-bold ${m.senderId===currentUser.uid?'text-cyan-400':'text-gray-400'}">${m.senderName}:</span> ${m.text}</div>`;
+                }).join('');
+
+                let actionBoardHtml = '';
+                if (state === 'END') {
+                    actionBoardHtml = `<p class="text-amber-500 font-bold text-center mt-6 glitch-anim">OPERATION TERMINATED</p>`;
+                } else if (isDay) {
+                    actionBoardHtml = `<p class="text-xs text-cyan-500 text-center mt-6 glitch-anim">낮 시간입니다.<br>좌측 모니터에서 타겟을 클릭해<br>투표권을 행사하십시오.</p>`;
+                } else {
+                    if (!myData.isAlive) actionBoardHtml = `<p class="text-xs text-gray-500 text-center mt-6">사망하여 행동할 수 없습니다.</p>`;
+                    else if (!myRole.actionName) actionBoardHtml = `<p class="text-xs text-gray-400 text-center mt-6">밤에 사용할 수 있는<br>액티브 스킬이 없습니다.</p>`;
+                    else if (roomData.actions && roomData.actions[currentUser.uid]) actionBoardHtml = `<p class="text-xs text-green-400 text-center mt-6 border border-green-800 p-2 rounded bg-green-900/20 glitch-anim">스킬 데이터 입력 완료.<br>아침을 기다리세요.</p>`;
+                    else actionBoardHtml = `<p class="text-xs text-purple-400 text-center mt-6 glitch-anim border border-purple-800 p-2 rounded bg-purple-900/20">야간 능력이 활성화되었습니다.<br>좌측 모니터에서 타겟을 클릭해<br>빠르게 <b>${myRole.actionName}</b> 하십시오!</p>`;
+                }
+
+                // 낮/밤에 따른 전체 배경 밝기 트랜지션
+                document.body.style.backgroundImage = isDay ? 'radial-gradient(circle at 50% 50%, #1a1f2e 0%, #050505 100%)' : 'radial-gradient(circle at 50% 50%, #110000 0%, #050505 100%)';
+
+                appDiv.innerHTML = `
+                    <div class="w-full h-full flex flex-col gap-4 animate-fadeIn">
+                        <div class="glass-panel w-full p-4 rounded-xl flex justify-between items-center ${themeClass} transition-all duration-1000">
+                            <div class="flex items-center gap-4">
+                                <div class="px-4 py-2 bg-black/50 border ${isDay ? 'border-cyan-500 text-cyan-400' : 'border-red-900 text-red-500'} rounded font-bold tracking-widest text-xl shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
+                                    DAY ${String(roomData.dayCount).padStart(2, '0')} : ${isDay ? '토론 페이즈' : '암살 및 조사 페이즈'}
+                                </div>
+                                ${isMyHost && state === 'PLAYING' ? `<button onclick="skipPhase()" class="bg-gray-800 hover:bg-red-900 text-gray-300 border border-gray-600 text-xs px-3 py-1 rounded transition-colors glitch-hover">방장 스킵</button>` : ''}
+                            </div>
+                            <div class="flex items-end gap-1">
+                                ${state === 'END' ? `<span class="text-4xl font-bold text-amber-500 nixie-font tracking-wider">END</span>` :
+                                `<span id="game-timer" class="text-4xl font-bold ${isDay ? 'text-cyan-300' : 'text-red-500'} nixie-font tracking-wider">00</span>
+                                <span class="text-xl ${isDay ? 'text-cyan-600' : 'text-red-800'} mb-1">:</span><span id="game-ms" class="text-xl ${isDay ? 'text-cyan-600' : 'text-red-800'} nixie-font mb-1 w-6">00</span>`}
+                            </div>
+                        </div>
+
+                        <div class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-0">
+                            <div class="glass-panel p-4 rounded-xl flex flex-col h-full overflow-hidden ${themeClass}">
+                                <h3 class="text-xs font-bold text-gray-400 tracking-widest mb-3 border-b border-gray-700 pb-2">TARGET MONITOR <span class="${isDay ? 'text-cyan-500' : 'text-red-500'} float-right animate-pulse">${isDay ? '투표권 행사 가능' : 'NIGHT VISION ON'}</span></h3>
+                                <div class="flex-1 overflow-y-auto flex flex-col gap-2 pr-2">${gridHtml}</div>
+                            </div>
+
+                            <div class="lg:col-span-2 glass-panel p-4 rounded-xl flex flex-col h-full ${themeClass}">
+                                <div class="flex gap-2 border-b border-gray-700 pb-2 mb-2">
+                                    <button onclick="setChatTab('ALL')" class="text-xs px-3 py-1 rounded transition-colors ${currentChatTab==='ALL'?'bg-cyan-900/50 text-cyan-200 border border-cyan-700':'text-gray-400 hover:text-cyan-200'}">ALL NETWORK</button>
+                                    <button onclick="setChatTab('SYSTEM')" class="text-xs px-3 py-1 rounded transition-colors ${currentChatTab==='SYSTEM'?'bg-amber-900/50 text-amber-200 border border-amber-700':'text-gray-400 hover:text-amber-200'}">SYSTEM LOGS</button>
+                                    ${myRole.faction === 'MAFIA' ? `<button onclick="setChatTab('FACTION')" class="text-xs px-3 py-1 rounded transition-colors ${currentChatTab==='FACTION'?'bg-red-900/50 text-red-200 border border-red-700':'text-gray-400 hover:text-red-200'}">DARK WEB (마피아)</button>` : ''}
+                                </div>
+                                <div id="chat-box" class="flex-1 overflow-y-auto bg-black/40 border border-gray-800 rounded-lg mb-3 p-3 flex flex-col">${msgsHtml}</div>
+                                <div class="flex gap-2">
+                                    <input type="text" id="chat-input" onkeypress="if(event.key==='Enter') window.sendChat()" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-cyan-500 outline-none transition-colors" placeholder="${myData.isAlive ? (isDay ? '보안 통신망 접속...' : '밤에는 오프라인 상태입니다.') : '통신 권한이 상실되었습니다.'}" ${myData.isAlive && state==='PLAYING' && isDay ? '' : 'disabled'}>
+                                    <button onclick="sendChat()" class="bg-gray-800 hover:bg-gray-700 text-cyan-500 px-4 rounded font-bold border border-gray-700 transition-colors glitch-hover" ${myData.isAlive && state==='PLAYING' && isDay ? '' : 'disabled'}>SEND</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel p-4 rounded-xl flex flex-col h-full ${themeClass}">
+                                <div class="bg-black/60 border border-gray-700 rounded-lg p-4 mb-4 relative overflow-hidden group">
+                                    <div class="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity"><svg class="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 00-1 1v1a1 1 0 002 0V3a1 1 0 00-1-1zM4 4h3a3 3 0 006 0h3a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm2.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm2.45 4a2.5 2.5 0 10-4.9 0h4.9zM12 9a1 1 0 100 2h3a1 1 0 100-2h-3zm-1 4a1 1 0 011-1h2a1 1 0 110 2h-2a1 1 0 01-1-1z" clip-rule="evenodd"></path></svg></div>
+                                    <p class="text-[10px] text-gray-500 tracking-widest mb-1">IDENTITY CARD</p>
+                                    <h2 class="text-2xl font-bold ${myRole.faction==='MAFIA'?'text-red-400 glitch-anim':(myRole.faction==='NEUTRAL'?'text-amber-400':'text-cyan-400')} tracking-wider mb-2">${myRole.name}</h2>
+                                    <span class="text-[10px] px-2 py-0.5 rounded border border-gray-600 opacity-80 uppercase bg-black/50">${myRole.faction}</span>
+                                    <p class="text-xs text-gray-300 mt-3 leading-relaxed break-keep">${myRole.desc}</p>
+                                </div>
+                                <div class="flex-1 border border-gray-700 bg-gray-900/50 rounded-lg p-4 flex flex-col items-center">
+                                    <h3 class="text-xs font-bold text-gray-400 tracking-widest mb-1 border-b border-gray-700 pb-2 w-full text-center">ACTION BOARD</h3>
+                                    ${actionBoardHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                if(state === 'PLAYING') startTimerDisplay();
+            }
+        }
+
+        if (!isLocalMock) { onAuthStateChanged(auth, (user) => { if (user) currentUser = user; }); }
+        render();
+    </script>
+</body>
+</html>
