@@ -60,6 +60,11 @@
         @keyframes screenShake { 10%, 90% { transform: translate3d(-5px, 0, 0) scale(1.02); } 20%, 80% { transform: translate3d(5px, 0, 0) scale(1.02); } 30%, 50%, 70% { transform: translate3d(-10px, 10px, 0) scale(1.05); } 40%, 60% { transform: translate3d(10px, -10px, 0) scale(1.05); } }
         @keyframes bloodFade { 0% { opacity: 1; filter: contrast(200%) brightness(150%); } 10% { opacity: 0.8; } 100% { opacity: 0; display: none; } }
         
+        /* [추가4] 페이즈 전환 오버레이 CSS */
+        #phase-overlay { pointer-events: none; position: fixed; inset: 0; z-index: 9998; opacity: 0; transition: opacity 1s, background 1s; }
+        .phase-day { background: rgba(0, 255, 255, 0.3); animation: flash 1s ease-out; }
+        .phase-night { background: rgba(100, 0, 200, 0.3); animation: flash 1s ease-out; }
+
         /* 타겟 호버 이펙트 */
         .target-hover-mafia:hover { box-shadow: inset 0 0 0 2px #f00; cursor: crosshair; }
         .target-hover-police:hover { box-shadow: inset 0 0 0 2px #0ff; cursor: cell; }
@@ -69,6 +74,7 @@
 <body class="min-h-screen flex items-center justify-center p-2 lg:p-4">
 
     <!-- 시각 효과 오버레이 -->
+    <div id="phase-overlay"></div>
     <div id="vfx-overlay"></div>
 
     <div id="app" class="w-full max-w-7xl h-[95vh] flex flex-col justify-center transition-all duration-500">
@@ -88,7 +94,7 @@
         // 0. 사이버펑크 오디오 엔진 (Web Audio API)
         // ==========================================
         const CyberAudio = {
-            ctx: null,
+            ctx: null, bgmOsc: null, bgmGain: null, bgmInterval: null,
             init: function() { 
                 if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
                 if(this.ctx.state === 'suspended') this.ctx.resume();
@@ -125,6 +131,44 @@
                 // 쿵쾅거리는 심장 박동
                 setTimeout(() => this.playTone(50, 'sine', 0.4, 1), 500);
                 setTimeout(() => this.playTone(50, 'sine', 0.4, 1), 900);
+            },
+            playPhaseTransition: function(isDay) {
+                if(!this.ctx) return;
+                if(isDay) {
+                    this.playTone(400, 'sine', 0.5, 0.1); setTimeout(()=>this.playTone(600, 'sine', 1.0, 0.1), 300);
+                } else {
+                    this.playTone(300, 'sawtooth', 0.5, 0.1); setTimeout(()=>this.playTone(150, 'sawtooth', 1.0, 0.1), 300);
+                }
+            },
+            setBGM: function(type) {
+                if(!this.ctx) return;
+                if(this.bgmInterval) clearInterval(this.bgmInterval);
+                if(this.bgmOsc) { try{this.bgmOsc.stop();}catch(e){} this.bgmOsc.disconnect(); this.bgmOsc = null; }
+                if(this.bgmGain) { this.bgmGain.disconnect(); this.bgmGain = null; }
+                
+                if (type === 'stop') return;
+
+                this.bgmOsc = this.ctx.createOscillator();
+                this.bgmGain = this.ctx.createGain();
+                this.bgmOsc.connect(this.bgmGain);
+                this.bgmGain.connect(this.ctx.destination);
+                
+                if (type === 'day') {
+                    this.bgmOsc.type = 'sine'; this.bgmOsc.frequency.value = 110; this.bgmGain.gain.value = 0.03; this.bgmOsc.start();
+                    this.bgmInterval = setInterval(() => { this.playTone(800, 'square', 0.02, 0.01); }, 1000);
+                } else if (type === 'night') {
+                    this.bgmOsc.type = 'sawtooth'; this.bgmOsc.frequency.value = 55; this.bgmGain.gain.value = 0.02; this.bgmOsc.start();
+                    let freq = 55; let up = true;
+                    this.bgmInterval = setInterval(() => {
+                        freq += up ? 1 : -1; if(freq > 65) up = false; if(freq < 45) up = true;
+                        if(this.bgmOsc) this.bgmOsc.frequency.linearRampToValueAtTime(freq, this.ctx.currentTime + 0.5);
+                    }, 500);
+                } else if (type === 'recruit') {
+                    this.bgmOsc.type = 'square'; this.bgmOsc.frequency.value = 40; this.bgmGain.gain.value = 0.05; this.bgmOsc.start();
+                    this.bgmInterval = setInterval(() => {
+                        this.playTone(60, 'sine', 0.2, 0.8); setTimeout(() => this.playTone(60, 'sine', 0.2, 0.8), 200);
+                    }, 800);
+                }
             }
         };
 
@@ -185,6 +229,7 @@
         let isTransitioning = false;
         let currentChatTab = 'ALL'; 
         let previousRole = null; // 포섭 이벤트 감지용
+        let previousPhase = null; // 페이즈 전환 감지용
 
         const appDiv = document.getElementById('app');
         const vfxDiv = document.getElementById('vfx-overlay');
@@ -203,9 +248,22 @@
             if(el) { el.classList.remove('glitch-anim'); void el.offsetWidth; el.classList.add('glitch-anim'); }
         }
 
+        // [추가4] 페이즈 전환 연출 (시각 & BGM 설정)
+        function triggerPhaseVFX(isDay) {
+            CyberAudio.playPhaseTransition(isDay);
+            CyberAudio.setBGM(isDay ? 'day' : 'night');
+            const po = document.getElementById('phase-overlay');
+            if(po) {
+                po.className = isDay ? 'phase-day' : 'phase-night';
+                po.style.opacity = '1';
+                setTimeout(() => { po.style.opacity = '0'; po.className = ''; }, 1000);
+            }
+        }
+
         // 대망의 포섭(Recruit) 연출
         function triggerRecruitVFX() {
             CyberAudio.playGlassCrack();
+            CyberAudio.setBGM('recruit'); // [추가5] 포섭 시 전용 BGM
             vfxDiv.className = 'blood-screen glass-crack';
             vfxDiv.style.opacity = '1';
             setTimeout(() => { vfxDiv.style.opacity = '0'; vfxDiv.className = ''; }, 4000);
@@ -248,18 +306,31 @@
                     if (!roomData.actions) roomData.actions = {};
                     
                     // 페이즈 전환 효과음
-                    if (roomData.status === 'playing' && prevStatus === 'lobby') { state = 'PLAYING'; CyberAudio.playScan(); }
-                    if (roomData.status === 'end' && prevStatus === 'playing') { state = 'END'; CyberAudio.playTone(400, 'sawtooth', 1, 0.2); }
+                    if (roomData.status === 'playing' && prevStatus === 'lobby') { 
+                        state = 'PLAYING'; CyberAudio.playScan(); 
+                        previousPhase = roomData.phase;
+                        triggerPhaseVFX(roomData.phase === 'day');
+                    }
+                    if (roomData.status === 'end' && prevStatus === 'playing') { 
+                        state = 'END'; CyberAudio.playTone(400, 'sawtooth', 1, 0.2); CyberAudio.setBGM('stop');
+                    }
                     
                     render();
                     
-                    // [VFX 로직] 내 역할이 시민에서 킬러로 변했는지 감지 (포섭)
-                    if (state === 'PLAYING' && roomData.players[currentUser.uid]) {
-                        const currentRole = roomData.players[currentUser.uid].role;
-                        if (previousRole && previousRole !== 'KILLER' && currentRole === 'KILLER') {
-                            triggerRecruitVFX();
+                    // [VFX 로직]
+                    if (state === 'PLAYING') {
+                        if (previousPhase && previousPhase !== roomData.phase) {
+                            triggerPhaseVFX(roomData.phase === 'day');
                         }
-                        previousRole = currentRole;
+                        previousPhase = roomData.phase;
+                        
+                        if (roomData.players[currentUser.uid]) {
+                            const currentRole = roomData.players[currentUser.uid].role;
+                            if (previousRole && previousRole !== 'KILLER' && currentRole === 'KILLER') {
+                                triggerRecruitVFX();
+                            }
+                            previousRole = currentRole;
+                        }
                     }
 
                     setTimeout(() => { const chatBox = document.getElementById('chat-box'); if(chatBox) chatBox.scrollTop = chatBox.scrollHeight; }, 50);
@@ -308,16 +379,25 @@
         // ==========================================
         window.startGame = async () => {
             CyberAudio.playClick();
-            if (isLocalMock && Object.keys(roomData.players).length < 6) {
-                const names = ["Alpha_Bot", "Beta_Bot", "Gamma_Bot", "Delta_Bot", "Epsilon_Bot", "Zeta_Bot", "Eta_Bot"];
-                for(let i=0; i<7; i++) {
-                    if (!roomData.players[`bot_${i}`]) {
-                        roomData.players[`bot_${i}`] = { nickname: names[i], joinedAt: Date.now()+i, isHost: false, isAlive: true, isBot: true };
-                    }
+            
+            // [추가1] 참가인원 설정에 따라 유동적으로 봇 투입
+            const maxP = roomData.settings?.maxPlayers || 13;
+            let currentUids = Object.keys(roomData.players);
+            
+            if (currentUids.length < maxP) {
+                const needed = maxP - currentUids.length;
+                const botNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa", "Lambda", "Mu", "Nu"];
+                const existingNames = Object.values(roomData.players).map(p => p.nickname);
+                for(let i=0; i<needed; i++) {
+                    let bName = botNames[i % botNames.length] + "_Bot";
+                    if (existingNames.includes(bName)) bName += "_" + Math.floor(Math.random()*1000);
+                    const botId = 'bot_' + Math.random().toString(36).substr(2, 6);
+                    roomData.players[botId] = { nickname: bName, joinedAt: Date.now()+i, isHost: false, isAlive: true, isBot: true };
                 }
             }
+            
             const uids = Object.keys(roomData.players);
-            if (uids.length < 6 && !isLocalMock) { CyberAudio.playError(); return showToast("최소 6명의 요원이 필요합니다.", "border-red-500 text-red-300"); }
+            if (uids.length < 6) { CyberAudio.playError(); return showToast("최소 6명의 요원이 필요합니다.", "border-red-500 text-red-300"); }
 
             const roleIds = getRolePool(Math.min(uids.length, 13));
             uids.sort(() => Math.random() - 0.5); roleIds.sort(() => Math.random() - 0.5);
@@ -325,15 +405,23 @@
             const updatedPlayers = { ...roomData.players };
             uids.forEach((uid, i) => { updatedPlayers[uid].role = roleIds[i] || 'CITIZEN'; updatedPlayers[uid].isAlive = true; });
 
-            const dayTime = roomData.settings?.dayTime || 60; // [추가] 설정된 시간 적용
+            const dayTime = roomData.settings?.dayTime || 60;
+            const nightTime = roomData.settings?.nightTime || 45;
 
+            // [추가3] 첫날 밤부터 시작
             const initialGameState = {
-                status: 'playing', phase: 'day', dayCount: 1, phaseEndTime: Date.now() + (dayTime * 1000), 
+                status: 'playing', phase: 'night', dayCount: 1, phaseEndTime: Date.now() + (nightTime * 1000), 
                 players: updatedPlayers, votes: {}, actions: {},
-                messages: [{ type: 'SYSTEM', text: `[ SYSTEM 시작 ] 1일차 토론이 시작되었습니다. 마피아를 색출하십시오.`, timestamp: Date.now() }]
+                messages: [{ type: 'SYSTEM', text: `[ SYSTEM 시작 ] 1일차 야간 암살 및 조사 페이즈가 시작되었습니다.`, timestamp: Date.now() }]
             };
 
-            if (isLocalMock) { Object.assign(roomData, initialGameState); state = 'PLAYING'; previousRole = updatedPlayers[currentUser.uid].role; render(); } 
+            if (isLocalMock) { 
+                Object.assign(roomData, initialGameState); state = 'PLAYING'; 
+                previousRole = updatedPlayers[currentUser.uid].role;
+                previousPhase = 'night';
+                triggerPhaseVFX(false);
+                render(); 
+            } 
             else await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), initialGameState);
         };
 
@@ -397,7 +485,7 @@
                 const tEl = document.getElementById('game-timer'); const mEl = document.getElementById('game-ms');
                 if(tEl) tEl.innerText = secs.toString().padStart(2, '0'); if(mEl) mEl.innerText = ms.toString().padStart(2, '0');
                 
-                if (remain <= 5000 && remain > 4900 && roomData.phase === 'day') CyberAudio.playTone(800, 'sawtooth', 0.1, 0.1); // 5초 카운트다운 틱
+                if (remain <= 5000 && remain > 4900) CyberAudio.playTone(800, 'sawtooth', 0.1, 0.1); // 카운트다운 틱
                 
                 if (remain === 0 && roomData.hostId === currentUser.uid && !isTransitioning) {
                     isTransitioning = true; processPhaseEnd();
@@ -413,17 +501,30 @@
             let newPhase = roomData.phase === 'day' ? 'night' : 'day';
             let newDay = roomData.phase === 'day' ? roomData.dayCount : roomData.dayCount + 1;
             
-            // [수정] 방장 권한으로 봇 시뮬레이션 (배포판 포함)
-            const aliveBots = Object.keys(roomData.players).filter(uid => uid !== currentUser.uid && roomData.players[uid].isAlive && (roomData.players[uid].isBot || (isLocalMock && uid.startsWith('bot_'))));
-            if (roomData.phase === 'day' && roomData.votes[currentUser.uid]) {
-                aliveBots.forEach(uid => roomData.votes[uid] = roomData.votes[currentUser.uid]);
+            // [추가2] 방장 권한으로 봇 시뮬레이션 (능동적 플레이)
+            const allAliveUids = Object.keys(roomData.players).filter(uid => roomData.players[uid].isAlive);
+            const aliveBots = allAliveUids.filter(uid => roomData.players[uid].isBot || (isLocalMock && uid.startsWith('bot_')));
+            
+            if (roomData.phase === 'day') {
+                aliveBots.forEach(uid => {
+                    const possibleTargets = allAliveUids.filter(t => t !== uid);
+                    if (possibleTargets.length > 0 && Math.random() > 0.3) { // 70% 확률로 투표
+                        roomData.votes[uid] = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
+                    }
+                });
             } else if (roomData.phase === 'night') {
                 aliveBots.forEach(uid => {
                     const botRole = roomData.players[uid].role;
                     if(ROLES_DB[botRole].actionName) {
-                        const rTarget = Object.keys(roomData.players)[Math.floor(Math.random() * Object.keys(roomData.players).length)];
-                        if (!roomData.actions) roomData.actions = {};
-                        roomData.actions[uid] = { role: botRole, target: rTarget };
+                        const possibleTargets = allAliveUids.filter(t => t !== uid);
+                        if (possibleTargets.length > 0) {
+                            const rTarget = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
+                            if (!roomData.actions) roomData.actions = {};
+                            roomData.actions[uid] = { role: botRole, target: rTarget };
+                            if (botRole === 'DETECTIVE' && possibleTargets.length > 1) {
+                                roomData.actions[uid].target2 = possibleTargets.find(t => t !== rTarget);
+                            }
+                        }
                     }
                 });
             }
