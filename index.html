@@ -111,16 +111,16 @@
             playClick: function() { this.playTone(800, 'square', 0.05, 0.1); },
             playError: function() { this.playTone(150, 'sawtooth', 0.2, 0.2); this.playTone(100, 'sawtooth', 0.3, 0.2, 100); },
             playScan: function() { this.playTone(1200, 'sine', 0.1, 0.05); setTimeout(()=>this.playTone(2400, 'sine', 0.2, 0.05), 100); },
-            playGunshot: function() { // 묵직한 소음기 소리
+            playGunshot: function() {
                 if(!this.ctx) return;
                 const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
                 osc.type = 'square'; osc.frequency.setValueAtTime(100, this.ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 0.3);
                 gain.gain.setValueAtTime(0.5, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
                 osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); osc.stop(this.ctx.currentTime + 0.3);
             },
-            playGlassCrack: function() { // 굉음 및 노이즈
+            playGlassCrack: function() {
                 if(!this.ctx) return;
-                const bufferSize = this.ctx.sampleRate * 0.5; // 0.5 seconds of noise
+                const bufferSize = this.ctx.sampleRate * 0.5;
                 const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
                 const data = buffer.getChannelData(0);
                 for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
@@ -128,7 +128,6 @@
                 const gain = this.ctx.createGain(); gain.gain.setValueAtTime(0.8, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
                 noise.connect(gain); gain.connect(this.ctx.destination); noise.start();
                 
-                // 쿵쾅거리는 심장 박동
                 setTimeout(() => this.playTone(50, 'sine', 0.4, 1), 500);
                 setTimeout(() => this.playTone(50, 'sine', 0.4, 1), 900);
             },
@@ -228,8 +227,8 @@
         let timerInterval = null;
         let isTransitioning = false;
         let currentChatTab = 'ALL'; 
-        let previousRole = null; // 포섭 이벤트 감지용
-        let previousPhase = null; // 페이즈 전환 감지용
+        let previousRole = null; 
+        let previousPhase = null; 
 
         const appDiv = document.getElementById('app');
         const vfxDiv = document.getElementById('vfx-overlay');
@@ -242,13 +241,11 @@
             setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
         };
 
-        // 시각 효과 트리거 함수
         function triggerGlitch(elementId) {
             const el = document.getElementById(elementId);
             if(el) { el.classList.remove('glitch-anim'); void el.offsetWidth; el.classList.add('glitch-anim'); }
         }
 
-        // [추가4] 페이즈 전환 연출 (시각 & BGM 설정)
         function triggerPhaseVFX(isDay) {
             CyberAudio.playPhaseTransition(isDay);
             CyberAudio.setBGM(isDay ? 'day' : 'night');
@@ -260,10 +257,9 @@
             }
         }
 
-        // 대망의 포섭(Recruit) 연출
         function triggerRecruitVFX() {
             CyberAudio.playGlassCrack();
-            CyberAudio.setBGM('recruit'); // [추가5] 포섭 시 전용 BGM
+            CyberAudio.setBGM('recruit'); 
             vfxDiv.className = 'blood-screen glass-crack';
             vfxDiv.style.opacity = '1';
             setTimeout(() => { vfxDiv.style.opacity = '0'; vfxDiv.className = ''; }, 4000);
@@ -305,7 +301,6 @@
                     if (!roomData.votes) roomData.votes = {};
                     if (!roomData.actions) roomData.actions = {};
                     
-                    // 페이즈 전환 효과음
                     if (roomData.status === 'playing' && prevStatus === 'lobby') { 
                         state = 'PLAYING'; CyberAudio.playScan(); 
                         previousPhase = roomData.phase;
@@ -317,7 +312,6 @@
                     
                     render();
                     
-                    // [VFX 로직]
                     if (state === 'PLAYING') {
                         if (previousPhase && previousPhase !== roomData.phase) {
                             triggerPhaseVFX(roomData.phase === 'day');
@@ -339,7 +333,6 @@
             state = 'LOBBY'; render();
         }
 
-        // [추가] 방장 설정 동기화
         window.updateSettings = async () => {
             if (roomData.hostId !== currentUser.uid) return;
             const maxPlayers = parseInt(document.getElementById('setting-max-players').value) || 13;
@@ -350,7 +343,6 @@
             else { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), { settings }); }
         };
 
-        // [추가] 봇 추가 로직
         window.addBot = async () => {
             CyberAudio.playClick();
             if (roomData.hostId !== currentUser.uid) return;
@@ -359,7 +351,7 @@
                 showToast(`최대 참가 인원(${maxP}명)에 도달했습니다.`, "border-red-500 text-red-300");
                 return;
             }
-            const botNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"];
+            const botNames = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa", "Lambda", "Mu", "Nu"];
             const existingNames = Object.values(roomData.players).map(p => p.nickname);
             let bName = "Bot_" + Math.floor(Math.random()*1000);
             for(let n of botNames) { if(!existingNames.includes(n + "_Bot")) { bName = n + "_Bot"; break; } }
@@ -380,7 +372,6 @@
         window.startGame = async () => {
             CyberAudio.playClick();
             
-            // [추가1] 참가인원 설정에 따라 유동적으로 봇 투입
             const maxP = roomData.settings?.maxPlayers || 13;
             let currentUids = Object.keys(roomData.players);
             
@@ -408,10 +399,10 @@
             const dayTime = roomData.settings?.dayTime || 60;
             const nightTime = roomData.settings?.nightTime || 45;
 
-            // [추가3] 첫날 밤부터 시작
             const initialGameState = {
                 status: 'playing', phase: 'night', dayCount: 1, phaseEndTime: Date.now() + (nightTime * 1000), 
                 players: updatedPlayers, votes: {}, actions: {},
+                recruitCount: 0, lastRecruitDay: 0, firstRecruitDone: false,
                 messages: [{ type: 'SYSTEM', text: `[ SYSTEM 시작 ] 1일차 야간 암살 및 조사 페이즈가 시작되었습니다.`, timestamp: Date.now() }]
             };
 
@@ -485,7 +476,7 @@
                 const tEl = document.getElementById('game-timer'); const mEl = document.getElementById('game-ms');
                 if(tEl) tEl.innerText = secs.toString().padStart(2, '0'); if(mEl) mEl.innerText = ms.toString().padStart(2, '0');
                 
-                if (remain <= 5000 && remain > 4900) CyberAudio.playTone(800, 'sawtooth', 0.1, 0.1); // 카운트다운 틱
+                if (remain <= 5000 && remain > 4900) CyberAudio.playTone(800, 'sawtooth', 0.1, 0.1); 
                 
                 if (remain === 0 && roomData.hostId === currentUser.uid && !isTransitioning) {
                     isTransitioning = true; processPhaseEnd();
@@ -501,14 +492,13 @@
             let newPhase = roomData.phase === 'day' ? 'night' : 'day';
             let newDay = roomData.phase === 'day' ? roomData.dayCount : roomData.dayCount + 1;
             
-            // [추가2] 방장 권한으로 봇 시뮬레이션 (능동적 플레이)
             const allAliveUids = Object.keys(roomData.players).filter(uid => roomData.players[uid].isAlive);
             const aliveBots = allAliveUids.filter(uid => roomData.players[uid].isBot || (isLocalMock && uid.startsWith('bot_')));
             
             if (roomData.phase === 'day') {
                 aliveBots.forEach(uid => {
                     const possibleTargets = allAliveUids.filter(t => t !== uid);
-                    if (possibleTargets.length > 0 && Math.random() > 0.3) { // 70% 확률로 투표
+                    if (possibleTargets.length > 0 && Math.random() > 0.3) { 
                         roomData.votes[uid] = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
                     }
                 });
@@ -561,49 +551,78 @@
                 let isKillLocked = false; let healedId = null; let guardedId = null; let maskedId = null;
                 let murderVictims = []; let attackerId = null; let recruitTargetId = null;
 
+                const maxPlayersAtStart = Object.keys(tempPlayers).length;
+                const maxRecruits = maxPlayersAtStart >= 11 ? 2 : 1;
+
+                // Step 1: 제어권 확정 (Control & Lock) - 보스의 포섭 검증
+                let bossAct = null;
                 for (const [uid, act] of Object.entries(acts)) {
                     if (act.role === 'BOSS' && act.target && tempPlayers[act.target].isAlive) {
-                        const tRole = ROLES_DB[tempPlayers[act.target].role];
-                        if (tRole.faction === 'CITIZEN' && tRole.id !== 'KILLER') {
-                            recruitTargetId = act.target; isKillLocked = true;
-                            privateMsgs.push({ receiverId: act.target, type: 'SYSTEM', text: `[CRITICAL WARNING] 시스템 강제 오버라이드. 당신은 보스에게 포섭되었습니다. 직업이 [킬러]로 변이합니다.`, timestamp: Date.now() });
-                            
-                            let jobSeekerId = Object.keys(tempPlayers).find(k => tempPlayers[k].role === 'JOBSEEKER' && tempPlayers[k].isAlive);
-                            if (jobSeekerId && !roomData.firstRecruitDone) {
-                                const oldRole = tempPlayers[act.target].role; tempPlayers[jobSeekerId].role = oldRole; 
-                                privateMsgs.push({ receiverId: jobSeekerId, type: 'SYSTEM', text: `[승계 발동] 포섭된 요원의 유지를 이어받아, 당신의 직업이 [${ROLES_DB[oldRole].name}]로 변경되었습니다.`, timestamp: Date.now() });
-                                payload['firstRecruitDone'] = true;
-                            }
-                            tempPlayers[act.target].role = 'KILLER'; break; 
-                        }
+                        bossAct = act; break;
                     }
                 }
 
+                if (bossAct) {
+                    const tRole = ROLES_DB[tempPlayers[bossAct.target].role];
+                    const recruitCount = roomData.recruitCount || 0;
+                    const lastRecruitDay = roomData.lastRecruitDay || 0;
+                    
+                    // 포섭 성공 조건: 횟수 남음, 연속 사용 아님, 대상이 시민(킬러 제외)
+                    if (recruitCount < maxRecruits && lastRecruitDay !== roomData.dayCount && tRole.faction === 'CITIZEN' && tRole.id !== 'KILLER') {
+                        recruitTargetId = bossAct.target;
+                        isKillLocked = true; // 포섭 성공 시 살해 잠금
+                        payload['recruitCount'] = recruitCount + 1;
+                        payload['lastRecruitDay'] = roomData.dayCount;
+                    } else if (Object.values(tempPlayers).some(p => p.role === 'KILLER' && p.isAlive)) {
+                        // 킬러가 살아있는데 포섭 조건은 안맞을 때 (포섭 무효 처리, 살해 승계 안 됨)
+                        const bossId = Object.keys(acts).find(k => acts[k] === bossAct);
+                        privateMsgs.push({ receiverId: bossId, type: 'SYSTEM', text: `[포섭 실패] 대상이 부적절하거나 쿨타임입니다. (살해 잠금 무효)`, timestamp: Date.now() });
+                    }
+                }
+
+                // Step 2: 데이터 전이 (State Transition)
+                if (recruitTargetId) {
+                    privateMsgs.push({ receiverId: recruitTargetId, type: 'SYSTEM', text: `[CRITICAL WARNING] 시스템 강제 오버라이드. 당신은 보스에게 포섭되었습니다. 직업이 [킬러]로 변이합니다.`, timestamp: Date.now() });
+                    
+                    let jobSeekerId = Object.keys(tempPlayers).find(k => tempPlayers[k].role === 'JOBSEEKER' && tempPlayers[k].isAlive);
+                    if (jobSeekerId && !roomData.firstRecruitDone) {
+                        const oldRole = tempPlayers[recruitTargetId].role; 
+                        tempPlayers[jobSeekerId].role = oldRole; 
+                        privateMsgs.push({ receiverId: jobSeekerId, type: 'SYSTEM', text: `[승계 발동] 포섭된 요원의 유지를 이어받아, 당신의 직업이 [${ROLES_DB[oldRole].name}]로 변경되었습니다.`, timestamp: Date.now() });
+                        payload['firstRecruitDone'] = true;
+                    }
+                    tempPlayers[recruitTargetId].role = 'KILLER'; 
+                }
+
+                // Step 3: 방어 및 은폐 설정 (Protection & Masking)
                 for (const [uid, act] of Object.entries(acts)) {
                     if (act.role === 'DOCTOR') healedId = act.target;
                     if (act.role === 'SOLDIER') guardedId = act.target;
                     if (act.role === 'LAWYER') maskedId = act.target;
-                    if (act.role === 'KILLER' || act.role === 'BOSS') attackerId = uid;
                 }
 
+                // Step 4: 정보 생성 (Investigation)
                 let hackerLogs = [];
                 for (const [uid, act] of Object.entries(acts)) {
                     const target = tempPlayers[act.target]; if (!target) continue;
                     let logText = "";
                     if (act.role === 'POLICE') {
                         let isMafia = (ROLES_DB[target.role].faction === 'MAFIA');
-                        if (target.role === 'BOSS' || act.target === maskedId) isMafia = false;
+                        if (target.role === 'BOSS' || act.target === maskedId) isMafia = false; // 보스 은신 & 변호사 보호
                         logText = `[스캔 결과] ${target.nickname} 요원은 [${isMafia ? '마피아' : '시민'}] 입니다.`;
                         privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: logText, timestamp: Date.now() });
                         hackerLogs.push(`[해킹] 경찰 스캔 기록: ${logText}`);
                     }
                     if (act.role === 'DETECTIVE' && act.target2) {
-                        const t2 = tempPlayers[act.target2]; let result = '[동맹]'; 
-                        if (ROLES_DB[target.role].faction !== ROLES_DB[t2.role].faction) result = '[대립]';
-                        if (target.role === 'BOSS' || t2.role === 'BOSS') result = '[경계]';
-                        logText = `[관계 분석] ${target.nickname}와 ${t2.nickname} 사이의 기류는 ${result} 입니다.`;
-                        privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: logText, timestamp: Date.now() });
-                        hackerLogs.push(`[해킹] 탐정 분석 기록: ${logText}`);
+                        const t2 = tempPlayers[act.target2]; 
+                        if(t2) {
+                            let result = '[동맹]'; 
+                            if (ROLES_DB[target.role].faction !== ROLES_DB[t2.role].faction) result = '[대립]';
+                            if (target.role === 'BOSS' || t2.role === 'BOSS') result = '[경계]'; // 보스 포함 시 경계 발생
+                            logText = `[관계 분석] ${target.nickname}와 ${t2.nickname} 사이의 기류는 ${result} 입니다.`;
+                            privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: logText, timestamp: Date.now() });
+                            hackerLogs.push(`[해킹] 탐정 분석 기록: ${logText}`);
+                        }
                     }
                     if (act.role === 'WATCHMAN') {
                         let visitors = Object.keys(acts).filter(k => k !== uid && acts[k].target === act.target).map(k => tempPlayers[k].nickname);
@@ -617,18 +636,30 @@
                     if (act.role === 'HACKER' && hackerLogs.length > 0) privateMsgs.push({ receiverId: uid, type: 'SYSTEM', text: hackerLogs[0], timestamp: Date.now() });
                 }
 
+                // Step 5: 물리적 충돌 해결 (Combat Resolution) - 킬러 우선, 없으면 보스가 승계
                 if (!isKillLocked) {
+                    let killAct = null; let killerUid = null;
                     for (const [uid, act] of Object.entries(acts)) {
-                        if (act.role === 'KILLER' || (act.role === 'BOSS' && !Object.values(tempPlayers).some(p => p.role === 'KILLER' && p.isAlive))) {
-                            if (act.target && act.target !== healedId && act.target !== guardedId) {
-                                tempPlayers[act.target].isAlive = false; murderVictims.push(act.target);
-                            } else if (act.target === guardedId) {
-                                privateMsgs.push({ receiverId: guardedId, type: 'SYSTEM', text: `[경계 방어] 당신의 초소에 마피아가 침입했으나 격퇴했습니다!`, timestamp: Date.now() });
-                            }
+                        if (act.role === 'KILLER') { killAct = act; killerUid = uid; break; }
+                    }
+                    if (!killAct && !Object.values(tempPlayers).some(p => p.role === 'KILLER' && p.isAlive)) {
+                        if (bossAct && !recruitTargetId) { // 포섭이 발동되지 않은 보스의 행동을 살해로 전환
+                            killAct = bossAct; killerUid = Object.keys(acts).find(k => acts[k] === bossAct);
+                        }
+                    }
+
+                    if (killAct && killAct.target) {
+                        const targetId = killAct.target;
+                        if (targetId !== healedId && targetId !== guardedId) {
+                            tempPlayers[targetId].isAlive = false; 
+                            murderVictims.push(targetId);
+                        } else if (targetId === guardedId) {
+                            privateMsgs.push({ receiverId: guardedId, type: 'SYSTEM', text: `[경계 방어] 당신의 초소에 마피아가 침입했으나 격퇴했습니다!`, timestamp: Date.now() });
                         }
                     }
                 }
 
+                // Step 6: 결과 발표 및 사후 처리 (Post-Processing)
                 newMsgs.push({ type: 'SYSTEM', text: `=== 밤이 지나고 아침이 밝았습니다 ===`, timestamp: Date.now() });
                 if (recruitTargetId) newMsgs.push({ type: 'SYSTEM', text: `[WARNING] 간밤에 누군가 불길한 굉음과 함께 끔찍한 괴물로 변이했습니다...`, timestamp: Date.now() });
                 
@@ -713,7 +744,6 @@
                     </div>`;
                 document.getElementById('btn-join').addEventListener('click', () => { CyberAudio.playClick(); const n = document.getElementById('nickname-input').value.trim(); if(n) joinRoom(n); else showToast("코드네임을 입력해야 합니다."); });
             } else if (state === 'LOBBY' && roomData) {
-                // [복구됨] 화려한 1단계 대기실 UI 복구
                 const playersArray = Object.entries(roomData.players || {}).map(([uid, data]) => ({uid, ...data})).sort((a,b)=>a.joinedAt-b.joinedAt);
                 const isAmIHost = roomData.hostId === currentUser.uid;
                 const playerCount = playersArray.length;
@@ -751,7 +781,6 @@
                                 <div>
                                     <h3 class="text-amber-500 font-bold tracking-widest mb-4">HOST CONTROLS</h3>
                                     <div class="space-y-4">
-                                        <!-- [추가] 인원 설정, 타이머 설정, 봇 추가 패널 -->
                                         <div class="bg-black/40 p-3 rounded border border-gray-800">
                                             <div class="flex justify-between items-center mb-2">
                                                 <p class="text-xs text-gray-400">참가 인원 설정</p>
@@ -784,11 +813,11 @@
                         </div>
                     </div>`;
             } else if ((state === 'PLAYING' || state === 'END') && roomData) {
-                // [최종본] 메인 게임 UI
                 const myData = roomData.players[currentUser.uid];
                 const myRole = ROLES_DB[myData.role];
                 const isDay = roomData.phase === 'day';
-                const themeClass = `theme-${myRole.faction}`;
+                // [Phase 3] 사망 시 테마를 고스트로 덮어쓰기
+                const themeClass = myData.isAlive ? `theme-${myRole.faction}` : 'border-gray-600 bg-gray-900/30 grayscale shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]';
                 const isMyHost = roomData.hostId === currentUser.uid;
 
                 const votesReceived = {};
@@ -797,40 +826,78 @@
                 }
                 const myVoteTarget = roomData.votes[currentUser.uid];
                 
-                // 마피아/조사직을 위한 호버 CSS 클래스 매핑
                 let hoverClass = '';
                 if(!isDay && myData.isAlive) {
                     if(myRole.faction === 'MAFIA') hoverClass = 'target-hover-mafia';
                     else if(myRole.type === 'INFO') hoverClass = 'target-hover-police';
                     else if(myRole.type === 'DEFENSE') hoverClass = 'target-hover-doctor';
+                    else if(myRole.id === 'GAMBLER') hoverClass = 'target-hover-police'; 
                 }
 
-                const gridHtml = Object.entries(roomData.players).map(([uid, p]) => `
-                    <div onclick="${isDay ? `castVote('${uid}')` : `selectActionTarget('${uid}')`}" class="relative glass-panel p-3 rounded-lg border flex items-center justify-between transition-all ${!p.isAlive ? 'opacity-40 grayscale' : (myVoteTarget===uid ? 'border-amber-500 bg-amber-900/20' : 'border-gray-700 hover:border-cyan-500')} ${p.isAlive ? hoverClass : ''}">
+                // [Phase 3] 투표 지목선 시각화를 위한 선 긋기 SVG는 렌더링 복잡도상, 카드 텍스트로 보완
+                const gridHtml = Object.entries(roomData.players).map(([uid, p]) => {
+                    const iVotedThis = myVoteTarget === uid;
+                    const isDead = !p.isAlive;
+                    // 내가 투표한 대상 붉은 선 시각화 흉내
+                    const borderStyle = iVotedThis && isDay ? 'border-amber-500 bg-amber-900/20 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : (isDead ? 'border-gray-800' : 'border-gray-700 hover:border-cyan-500');
+                    
+                    return `
+                    <div onclick="${isDay ? `castVote('${uid}')` : `selectActionTarget('${uid}')`}" class="relative glass-panel p-3 rounded-lg border flex items-center justify-between transition-all ${isDead ? 'opacity-30 grayscale' : borderStyle} ${p.isAlive && myData.isAlive ? hoverClass : (isDead ? 'cursor-not-allowed' : '')}">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-gray-900 border ${!p.isAlive ? 'border-red-900' : 'border-cyan-900'} rounded flex items-center justify-center">
-                                ${!p.isAlive ? '<span class="text-red-500 font-bold text-xs">DEAD</span>' : '<span class="text-gray-500 text-[10px]">CCTV</span>'}
+                            <div class="w-10 h-10 bg-gray-900 border ${isDead ? 'border-red-900' : 'border-cyan-900'} rounded flex items-center justify-center">
+                                ${isDead ? '<span class="text-red-500 font-bold text-xs">DEAD</span>' : '<span class="text-gray-500 text-[10px]">CCTV</span>'}
                             </div>
                             <div>
-                                <p class="text-sm font-bold text-gray-200">${p.nickname} ${uid === currentUser.uid ? '<span class="text-cyan-500 text-xs">(나)</span>' : ''}</p>
+                                <p class="text-sm font-bold ${isDead ? 'text-gray-500 line-through' : 'text-gray-200'}">${p.nickname} ${uid === currentUser.uid ? '<span class="text-cyan-500 text-xs">(나)</span>' : ''}</p>
                                 ${votesReceived[uid] && isDay && p.isAlive ? `<p class="text-xs text-amber-400 font-bold animate-pulse">▲ ${votesReceived[uid]}표 지목됨</p>` : ''}
+                                ${isDay && p.isAlive && roomData.votes[uid] ? `<p class="text-[10px] text-gray-400 mt-0.5">▶ [${roomData.players[roomData.votes[uid]]?.nickname}] 지목 중</p>` : ''}
                             </div>
                         </div>
-                        ${myVoteTarget === uid && isDay ? `<div class="text-amber-500"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg></div>` : ''}
+                        ${iVotedThis && isDay ? `<div class="text-amber-500"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg></div>` : ''}
                     </div>
-                `).join('');
+                `}).join('');
 
                 const msgsHtml = (roomData.messages || []).filter(m => {
                     if (m.receiverId && m.receiverId !== currentUser.uid) return false; 
+                    // [Phase 3] 고스트 메시지 필터링
+                    if (m.type === 'GHOST') return !myData.isAlive || currentChatTab === 'GHOST';
                     if (currentChatTab === 'ALL') return m.type === 'ALL' || m.type === 'SYSTEM';
                     if (currentChatTab === 'SYSTEM') return m.type === 'SYSTEM';
                     if (currentChatTab === 'FACTION') return m.type === 'FACTION' || m.type === 'SYSTEM';
+                    if (currentChatTab === 'GHOST') return m.type === 'GHOST' || m.type === 'SYSTEM';
                     return true;
                 }).map(m => {
                     if(m.type === 'SYSTEM') return `<div class="chat-msg text-amber-300 text-xs my-2 px-2 py-1 bg-amber-900/20 border-l-2 border-amber-500 glitch-anim">${m.receiverId ? '<span class="text-cyan-300 font-bold">[개인 수신] </span>' : ''}${m.text}</div>`;
                     if(m.type === 'FACTION') return `<div class="chat-msg text-red-300 text-sm my-1"><span class="font-bold text-red-500">[마피아] ${m.senderName}:</span> ${m.text}</div>`;
+                    if(m.type === 'GHOST') return `<div class="chat-msg text-purple-300 text-sm my-1 opacity-70"><span class="font-bold text-purple-500">[👻망령] ${m.senderName}:</span> <span class="italic">${m.text}</span></div>`;
                     return `<div class="chat-msg text-gray-200 text-sm my-1"><span class="font-bold ${m.senderId===currentUser.uid?'text-cyan-400':'text-gray-400'}">${m.senderName}:</span> ${m.text}</div>`;
                 }).join('');
+
+                // [Phase 3] 사망 시 입력창 활성화 (고스트 통신용)
+                const canChat = (myData.isAlive && state==='PLAYING' && isDay) || !myData.isAlive;
+                let chatPlaceholder = "보안 통신망 접속...";
+                if (!myData.isAlive) chatPlaceholder = "망자의 쉼터에 메시지 남기기...";
+                else if (!isDay) chatPlaceholder = "밤에는 오프라인 상태입니다.";
+
+                // sendChat 오버라이드 
+                window.sendChat = async () => {
+                    const input = document.getElementById('chat-input'); const text = input.value.trim();
+                    if(!text || (!roomData.players[currentUser.uid].isAlive && currentChatTab !== 'GHOST')) {
+                        if (!roomData.players[currentUser.uid].isAlive) showToast("사망자는 고스트 통신망(GHOST NET)에서만 대화할 수 있습니다.", "border-purple-500 text-purple-300");
+                        return;
+                    }
+                    CyberAudio.playClick();
+                    
+                    let type = currentChatTab; 
+                    if(type === 'SYSTEM') type = 'ALL';
+                    if(!roomData.players[currentUser.uid].isAlive) type = 'GHOST'; // 사망자는 무조건 고스트
+                    else if(type === 'FACTION' && ROLES_DB[roomData.players[currentUser.uid].role].faction !== 'MAFIA') type = 'ALL';
+                    
+                    const msg = { senderId: currentUser.uid, senderName: roomData.players[currentUser.uid].nickname, text, type, timestamp: Date.now() };
+                    input.value = '';
+                    if(isLocalMock) { roomData.messages.push(msg); triggerGlitch('app'); render(); }
+                    else await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), { messages: arrayUnion(msg) });
+                };
 
                 let actionBoardHtml = '';
                 if (state === 'END') {
@@ -844,7 +911,6 @@
                     else actionBoardHtml = `<p class="text-xs text-purple-400 text-center mt-6 glitch-anim border border-purple-800 p-2 rounded bg-purple-900/20">야간 능력이 활성화되었습니다.<br>좌측 모니터에서 타겟을 클릭해<br>빠르게 <b>${myRole.actionName}</b> 하십시오!</p>`;
                 }
 
-                // 낮/밤에 따른 전체 배경 밝기 트랜지션
                 document.body.style.backgroundImage = isDay ? 'radial-gradient(circle at 50% 50%, #1a1f2e 0%, #050505 100%)' : 'radial-gradient(circle at 50% 50%, #110000 0%, #050505 100%)';
 
                 appDiv.innerHTML = `
@@ -889,14 +955,64 @@
                                     <h2 class="text-2xl font-bold ${myRole.faction==='MAFIA'?'text-red-400 glitch-anim':(myRole.faction==='NEUTRAL'?'text-amber-400':'text-cyan-400')} tracking-wider mb-2">${myRole.name}</h2>
                                     <span class="text-[10px] px-2 py-0.5 rounded border border-gray-600 opacity-80 uppercase bg-black/50">${myRole.faction}</span>
                                     <p class="text-xs text-gray-300 mt-3 leading-relaxed break-keep">${myRole.desc}</p>
+                                    ${myRole.id === 'LAWYER' ? `<p class="text-xs text-amber-300 mt-2 font-bold">[비밀 의뢰인: ${roomData.players[myData.lawyerClient]?.nickname || '없음'}]</p>` : ''}
+                                    ${myRole.id === 'GAMBLER' ? `<p class="text-xs text-amber-300 mt-2 font-bold">[예측 성공: ${myData.gamblerSuccess || 0} / 3회]</p>` : ''}
                                 </div>
+                                
+                                <!-- [Phase 3] 디지털 메모장 추가 -->
+                                <div class="bg-black/40 border border-gray-800 rounded-lg p-3 mb-4">
+                                    <p class="text-[10px] text-gray-500 tracking-widest mb-1 flex justify-between">PRIVATE NOTEPAD <span class="text-cyan-700">로컬 저장</span></p>
+                                    <textarea id="private-memo" class="w-full bg-transparent border-none text-xs text-gray-400 focus:text-cyan-200 focus:outline-none resize-none h-16" placeholder="수사 메모를 기록하십시오... (자신만 볼 수 있음)" onchange="localStorage.setItem('mafia_memo_' + currentRoomId, this.value)">${localStorage.getItem('mafia_memo_' + currentRoomId) || ''}</textarea>
+                                </div>
+
                                 <div class="flex-1 border border-gray-700 bg-gray-900/50 rounded-lg p-4 flex flex-col items-center">
                                     <h3 class="text-xs font-bold text-gray-400 tracking-widest mb-1 border-b border-gray-700 pb-2 w-full text-center">ACTION BOARD</h3>
-                                    ${actionBoardHtml}
+                                    ${(function() {
+                                        if (state === 'END') return `<p class="text-amber-500 font-bold text-center mt-6 glitch-anim">OPERATION TERMINATED</p>`;
+                                        if (isDay) {
+                                            if (myRole.id === 'SHAMAN' && myData.isAlive) {
+                                                const deadOptions = Object.entries(roomData.players).filter(([id, p]) => !p.isAlive).map(([id, p]) => `<option value="${id}">${p.nickname}</option>`).join('');
+                                                const usedToday = roomData.shamanUsed && roomData.shamanUsed[roomData.dayCount] === currentUser.uid;
+                                                if (deadOptions && !usedToday) return `<div class="w-full flex flex-col gap-2 mt-2"><p class="text-[10px] text-purple-400 text-center">망자의 원혼이 떠돌고 있습니다.</p><select id="shaman-target" class="w-full bg-gray-900 border border-purple-700 text-purple-200 rounded p-2 text-sm focus:border-purple-500 outline-none"><option value="">-- 사망자 선택 --</option>${deadOptions}</select><button onclick="submitShamanAction()" class="w-full mt-2 py-2 bg-purple-900 hover:bg-purple-800 border border-purple-500 text-purple-100 font-bold rounded transition-colors text-xs">혼령 교신 (낮 1회)</button></div>`;
+                                                if (usedToday) return `<p class="text-xs text-green-400 text-center mt-6">오늘의 교신을 완료했습니다.</p>`;
+                                            }
+                                            return `<p class="text-xs text-cyan-500 text-center mt-6 glitch-anim">낮 시간입니다.<br>좌측 모니터에서 타겟을 클릭해<br>투표권을 행사하십시오.</p>`;
+                                        } else {
+                                            if (!myData.isAlive) return `<p class="text-xs text-gray-500 text-center mt-6">사망하여 행동할 수 없습니다.</p>`;
+                                            if (!myRole.actionName) return `<p class="text-xs text-gray-400 text-center mt-6">밤에 사용할 수 있는<br>액티브 스킬이 없습니다.</p>`;
+                                            if (roomData.actions && roomData.actions[currentUser.uid]) return `<p class="text-xs text-green-400 text-center mt-6 border border-green-800 p-2 rounded bg-green-900/20 glitch-anim">스킬 데이터 입력 완료.<br>아침을 기다리세요.</p>`;
+                                            
+                                            // [Phase 2] 직업별 타겟 옵션 동적 생성
+                                            let targetOptions = '';
+                                            if (myRole.id === 'GAMBLER') targetOptions = Object.entries(roomData.players).filter(([id, p]) => p.isAlive).map(([id, p]) => `<option value="${id}">${p.nickname} (사망/처형 예측)</option>`).join('');
+                                            else if (myRole.id === 'ARCHIVIST') targetOptions = Object.entries(roomData.players).filter(([id, p]) => id !== currentUser.uid).map(([id, p]) => `<option value="${id}">${p.nickname} (과거 기록 열람)</option>`).join('');
+                                            else targetOptions = Object.entries(roomData.players).filter(([id, p]) => p.isAlive && id !== currentUser.uid).map(([id, p]) => `<option value="${id}">${p.nickname}</option>`).join('');
+                                            
+                                            return `
+                                                <div class="w-full flex flex-col gap-2 mt-2">
+                                                    <label class="text-[10px] text-cyan-500">${myRole.actionName} 대상 선택:</label>
+                                                    <select id="action-target-1" class="w-full bg-gray-900 border border-gray-700 text-cyan-200 rounded p-2 text-sm focus:border-cyan-500 outline-none">
+                                                        <option value="">-- 타겟 선택 --</option>
+                                                        ${targetOptions}
+                                                    </select>
+                                                    ${myRole.id === 'DETECTIVE' ? `
+                                                    <select id="action-target-2" class="w-full bg-gray-900 border border-gray-700 text-cyan-200 rounded p-2 text-sm focus:border-cyan-500 outline-none mt-1">
+                                                        <option value="">-- 비교 타겟 2 선택 --</option>
+                                                        ${targetOptions}
+                                                    </select>` : ''}
+                                                    <button onclick="submitAction()" class="w-full mt-4 py-3 bg-cyan-900 hover:bg-cyan-800 border border-cyan-500 text-cyan-100 font-bold rounded flex justify-center items-center gap-2 transition-colors">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path></svg>
+                                                        CONFIRM ACTION
+                                                    </button>
+                                                </div>
+                                            `;
+                                        }
+                                    })()}
                                 </div>
                             </div>
                         </div>
                     </div>
+                    ${guideModalHtml}
                 `;
                 if(state === 'PLAYING') startTimerDisplay();
             }
