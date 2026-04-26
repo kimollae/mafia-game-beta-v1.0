@@ -814,35 +814,38 @@ window.addEventListener('load', async () => {
 
   // ── 게임 상태 구독 ──────────────────────────────────────
   gameUnsub = db.ref('rooms/' + ROOM_ID + '/gameState');
-  gameUnsub.on('value', async snap => {
+  gameUnsub.on('value', snap => {
     if (!snap.exists()) return;
     const gs = snap.val();
     gameState = gs;
 
-    // ★ playerRoles 누락 시 host가 재작성 (이전 초기화 실패 복구)
-    if (isHost && gs.assignments) {
-      const myRoleSnap = await db.ref('playerRoles/' + ROOM_ID + '/' + MY_UID).get();
-      if (!myRoleSnap.exists()) {
-        showSys('직업 정보 복구 중...', '');
-        try {
-          for (const [uid, info] of Object.entries(gs.assignments)) {
-            const roleData = {
-              role:   info.role,
-              team:   info.team,
-              nameKo: MafiaEngine.ROLES[info.role]?.nameKo || info.role,
-            };
-            if (info.role === 'LAWYER' && gs.clientUID) roleData.clientUID = gs.clientUID;
-            await db.ref('playerRoles/' + ROOM_ID + '/' + uid).set(roleData);
-          }
-          showSys('직업 정보 복구 완료', 'success');
-        } catch(e) { showSys('복구 오류: ' + e.message, 'warn'); }
-      }
-    }
-
+    // ★ UI 먼저 즉시 실행 (await 없이)
     myAlive = gs.assignments?.[MY_UID]?.alive !== false;
     renderPlayers(gs);
     updatePhaseUI(gs);
     checkGameOver(gs);
+
+    // ★ playerRoles 복구는 백그라운드 (UI 블로킹 없음)
+    if (isHost && gs.assignments) {
+      (async () => {
+        try {
+          const myRoleSnap = await db.ref('playerRoles/' + ROOM_ID + '/' + MY_UID).get();
+          if (!myRoleSnap.exists()) {
+            showSys('직업 정보 복구 중...', '');
+            for (const [uid, info] of Object.entries(gs.assignments)) {
+              const roleData = {
+                role:   info.role,
+                team:   info.team,
+                nameKo: MafiaEngine.ROLES[info.role]?.nameKo || info.role,
+              };
+              if (info.role === 'LAWYER' && gs.clientUID) roleData.clientUID = gs.clientUID;
+              await db.ref('playerRoles/' + ROOM_ID + '/' + uid).set(roleData);
+            }
+            showSys('직업 정보 복구 완료', 'success');
+          }
+        } catch(e) { showSys('복구 오류: ' + e.message, 'warn'); }
+      })();
+    }
 
     // 사망 시 ghost 탭 표시
     if (!myAlive) {
