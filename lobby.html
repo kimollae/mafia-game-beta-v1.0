@@ -647,6 +647,80 @@ main {
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* ── 봇 관리 UI ── */
+.bot-section {
+  border-top: 1px solid var(--c-border);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bot-section-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--c-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bot-section-label::before { content: '//'; color: var(--c-amber); }
+.bot-count-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bot-count-display {
+  font-family: var(--font-hud);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--c-amber);
+  min-width: 32px;
+  text-align: center;
+  text-shadow: 0 0 12px rgba(255,183,0,0.4);
+}
+.bot-btn {
+  width: 36px; height: 36px;
+  border: 1px solid var(--c-amber-dim);
+  background: transparent;
+  color: var(--c-amber);
+  font-size: 18px;
+  font-family: var(--font-mono);
+  cursor: crosshair;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.bot-btn:hover { background: rgba(255,183,0,0.1); border-color: var(--c-amber); }
+.bot-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.bot-preset-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bot-preset {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-muted);
+  padding: 4px 10px;
+  cursor: crosshair;
+  transition: all 0.15s;
+}
+.bot-preset:hover { border-color: var(--c-amber); color: var(--c-amber); }
+.bot-info {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--c-muted);
+  line-height: 1.5;
+  padding: 8px;
+  border: 1px solid var(--c-border);
+  background: rgba(255,183,0,0.03);
+}
+.bot-info span { color: var(--c-amber); }
+
 /* ─── LOADING SCREEN ─────────────────────────────────────── */
 #loading {
   position: fixed; inset: 0;
@@ -863,6 +937,31 @@ main {
           <option value="60">60초</option>
         </select>
       </div>
+      <!-- 봇 추가/제거 -->
+      <div class="bot-section">
+        <div class="bot-section-label">BOT MANAGEMENT</div>
+
+        <div class="bot-count-row">
+          <button class="bot-btn" id="bot-remove" onclick="adjustBot(-1)">－</button>
+          <div class="bot-count-display" id="bot-count">0</div>
+          <button class="bot-btn" id="bot-add" onclick="adjustBot(1)">＋</button>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--c-muted)">봇 인원</span>
+        </div>
+
+        <div class="bot-preset-row">
+          <button class="bot-preset" onclick="setBotPreset(6)">6인 채우기</button>
+          <button class="bot-preset" onclick="setBotPreset(8)">8인 채우기</button>
+          <button class="bot-preset" onclick="setBotPreset(10)">10인 채우기</button>
+          <button class="bot-preset" onclick="setBotPreset(13)">13인 채우기</button>
+          <button class="bot-preset" onclick="clearBots()">봇 전체 제거</button>
+        </div>
+
+        <div class="bot-info" id="bot-info">
+          봇을 추가하면 자동으로 행동합니다.<br>
+          현재: 실제 <span id="real-count">1</span>명 + 봇 <span id="bot-count-info">0</span>명 = 합계 <span id="total-count">1</span>명
+        </div>
+      </div>
+
       <button class="btn btn-primary" id="start-btn" onclick="startGame()" disabled>
         ▶ 작전 개시 (최소 6인 필요)
       </button>
@@ -1039,9 +1138,12 @@ function openWaitingRoom(roomId) {
 
 // ── 대기실 렌더링 ────────────────────────────────────────────
 function renderWaitingRoom(room) {
-  const players = Object.values(room.players || {})
-    .filter(p => p.online !== false)
+  const allPlayers = Object.values(room.players || {})
     .sort((a,b) => a.joinedAt - b.joinedAt);
+  const players = allPlayers.filter(p => p.online !== false || p.isBot);
+
+  // 봇 UI 업데이트
+  if (isHost) updateBotUI(room.players || {});
 
   const isHost = room.host === currentUser?.uid;
   const count  = players.length;
@@ -1098,10 +1200,11 @@ function renderWaitingRoom(room) {
 
     // 시작 버튼 활성화 조건
     const startBtn = document.getElementById('start-btn');
-    startBtn.disabled = count < 6;
-    startBtn.textContent = count < 6
-      ? `▶ 작전 개시 (${count}/6 — 추가 인원 필요)`
-      : `▶ 작전 개시 (${count}인 확인)`;
+    const totalForStart = Object.keys(room.players || {}).length;
+    startBtn.disabled = totalForStart < 6;
+    startBtn.textContent = totalForStart < 6
+      ? `▶ 작전 개시 (${totalForStart}/6 — 추가 인원 필요)`
+      : `▶ 작전 개시 (${totalForStart}인 확인)`;
   } else {
     hostCtrl.classList.add('hidden');
     guestWait.style.display = 'block';
@@ -1124,7 +1227,107 @@ document.getElementById && setTimeout(() => {
   });
 }, 1500);
 
-// ── 게임 시작 ────────────────────────────────────────────────
+// ── 봇 관리 ─────────────────────────────────────────────────
+const BOT_NAMES = [
+  'CIPHER','GHOST','VIPER','LYNX','NOVA','WRAITH',
+  'SIGMA','ORACLE','PHANTOM','RAVEN','JADE','TITAN',
+];
+
+function getBotCount() {
+  if (!currentRoom || !db) return 0;
+  return parseInt(document.getElementById('bot-count').textContent) || 0;
+}
+
+async function adjustBot(delta) {
+  if (!currentRoom || !db) return;
+
+  const snap = await db.ref(`rooms/${currentRoom}/players`).get();
+  const players = snap.val() || {};
+  const realPlayers = Object.values(players).filter(p => !p.isBot);
+  const botPlayers  = Object.values(players).filter(p => p.isBot);
+  const total = Object.keys(players).length;
+
+  if (delta > 0) {
+    // 봇 추가
+    if (total >= 13) { showToast('최대 13인 초과', true); return; }
+    const usedNames = Object.values(players).map(p => p.nickname);
+    const availName = BOT_NAMES.find(n => !usedNames.includes(n)) || 'BOT' + Date.now();
+    const botUID = 'bot_' + Date.now();
+    await db.ref(`rooms/${currentRoom}/players/${botUID}`).set({
+      uid:      botUID,
+      nickname: availName,
+      isBot:    true,
+      isHost:   false,
+      joinedAt: Date.now(),
+      online:   true,
+    });
+    showToast(`봇 ${availName} 추가`);
+
+  } else {
+    // 봇 제거 (마지막 봇 제거)
+    if (!botPlayers.length) { showToast('제거할 봇이 없습니다', true); return; }
+    const lastBot = botPlayers.sort((a,b) => b.joinedAt - a.joinedAt)[0];
+    const botUID  = Object.keys(players).find(k => players[k].uid === lastBot.uid);
+    if (botUID) {
+      await db.ref(`rooms/${currentRoom}/players/${botUID}`).remove();
+      showToast(`봇 ${lastBot.nickname} 제거`);
+    }
+  }
+}
+
+async function setBotPreset(targetTotal) {
+  if (!currentRoom || !db) return;
+  const snap = await db.ref(`rooms/${currentRoom}/players`).get();
+  const players = snap.val() || {};
+  const realCount = Object.values(players).filter(p => !p.isBot).length;
+  const currentTotal = Object.keys(players).length;
+  const needBots = targetTotal - realCount;
+
+  if (needBots < 0) { showToast('실제 인원이 목표보다 많습니다', true); return; }
+
+  // 기존 봇 전부 제거 후 재추가
+  await clearBots(true);
+
+  for (let i = 0; i < needBots; i++) {
+    await adjustBot(1);
+    await new Promise(r => setTimeout(r, 100)); // 순서 보장
+  }
+  showToast(`${targetTotal}인 구성 완료 (실제 ${realCount} + 봇 ${needBots})`);
+}
+
+async function clearBots(silent = false) {
+  if (!currentRoom || !db) return;
+  const snap = await db.ref(`rooms/${currentRoom}/players`).get();
+  const players = snap.val() || {};
+  const botUIDs = Object.entries(players)
+    .filter(([, p]) => p.isBot)
+    .map(([uid]) => uid);
+
+  for (const uid of botUIDs) {
+    await db.ref(`rooms/${currentRoom}/players/${uid}`).remove();
+  }
+  if (!silent) showToast('봇 전체 제거 완료');
+}
+
+function updateBotUI(players) {
+  const all   = Object.values(players || {});
+  const real  = all.filter(p => !p.isBot).length;
+  const bots  = all.filter(p => p.isBot).length;
+  const total = all.length;
+
+  document.getElementById('bot-count').textContent      = bots;
+  document.getElementById('bot-count-info').textContent = bots;
+  document.getElementById('real-count').textContent     = real;
+  document.getElementById('total-count').textContent    = total;
+
+  // 버튼 활성/비활성
+  const addBtn = document.getElementById('bot-add');
+  const remBtn = document.getElementById('bot-remove');
+  if (addBtn) addBtn.disabled = total >= 13;
+  if (remBtn) remBtn.disabled = bots === 0;
+}
+
+// ── 게임 시작 ─────────────────────────────────────────────
 async function startGame() {
   if (!currentRoom || !db) return;
   await db.ref(`rooms/${currentRoom}/status`).set('playing');
