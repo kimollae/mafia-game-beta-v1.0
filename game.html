@@ -814,10 +814,30 @@ window.addEventListener('load', async () => {
 
   // ── 게임 상태 구독 ──────────────────────────────────────
   gameUnsub = db.ref('rooms/' + ROOM_ID + '/gameState');
-  gameUnsub.on('value', snap => {
+  gameUnsub.on('value', async snap => {
     if (!snap.exists()) return;
     const gs = snap.val();
     gameState = gs;
+
+    // ★ playerRoles 누락 시 host가 재작성 (이전 초기화 실패 복구)
+    if (isHost && gs.assignments) {
+      const myRoleSnap = await db.ref('playerRoles/' + ROOM_ID + '/' + MY_UID).get();
+      if (!myRoleSnap.exists()) {
+        showSys('직업 정보 복구 중...', '');
+        try {
+          for (const [uid, info] of Object.entries(gs.assignments)) {
+            const roleData = {
+              role:   info.role,
+              team:   info.team,
+              nameKo: MafiaEngine.ROLES[info.role]?.nameKo || info.role,
+            };
+            if (info.role === 'LAWYER' && gs.clientUID) roleData.clientUID = gs.clientUID;
+            await db.ref('playerRoles/' + ROOM_ID + '/' + uid).set(roleData);
+          }
+          showSys('직업 정보 복구 완료', 'success');
+        } catch(e) { showSys('복구 오류: ' + e.message, 'warn'); }
+      }
+    }
 
     myAlive = gs.assignments?.[MY_UID]?.alive !== false;
     renderPlayers(gs);
@@ -984,50 +1004,60 @@ function renderPlayers(gs) {
   const aliveCount = playerEntries.filter(([,p]) => p.alive).length;
   document.getElementById('alive-count').textContent = 'ALIVE: ' + aliveCount;
 
+  // ★ gameState의 nickname 캐시에서 직접 렌더 (DB 조회 제거 → 안정성 향상)
+  // nickname은 gameState에 없으므로 메모리 캐시 사용
+  if (!window._nickCache) window._nickCache = {};
+
+  // 캐시 업데이트 (비동기지만 기다리지 않음)
   db.ref('rooms/' + ROOM_ID + '/players').get().then(snap => {
-    const roomPlayers = snap.val() || {};
+    if (snap.exists()) {
+      Object.entries(snap.val()).forEach(([uid, p]) => {
+        window._nickCache[uid] = p.nickname || uid;
+      });
+      // 캐시 갱신 후 카드 다시 그리기
+      if (gameState) renderPlayers(gameState);
+    }
+  });
 
-    playerEntries.forEach(([uid, p]) => {
-      const rp       = roomPlayers[uid] || {};
-      const nick     = rp.nickname || uid;
-      const isMe     = uid === MY_UID;
-      const tag      = playerTags[uid];
-      const voteCount = voteTally[uid] || 0;
-      const myVotedThis = voteLog[MY_UID] === uid;
-      const isTargeted = selectedTarget1 === uid || selectedTarget2 === uid;
+  playerEntries.forEach(([uid, p]) => {
+    const nick        = window._nickCache[uid] || uid;
+    const isMe        = uid === MY_UID;
+    const tag         = playerTags[uid];
+    const voteCount   = voteTally[uid] || 0;
+    const myVotedThis = voteLog[MY_UID] === uid;
+    const isTargeted  = selectedTarget1 === uid || selectedTarget2 === uid;
 
-      const card = document.createElement('div');
-      card.className = 'p-card'
-        + (!p.alive ? ' dead' : '')
-        + (isMe ? ' me' : '')
-        + (isTargeted ? ' targeted' : '')
-        + (myVotedThis ? ' vote-target' : '');
-      card.dataset.uid = uid;
-      card.onclick = () => handlePlayerClick(uid, p.alive);
-      card.oncontextmenu = (e) => { e.stopPropagation(); openTagMenu(e, uid); };
+    const card = document.createElement('div');
+    card.className = 'p-card'
+      + (!p.alive ? ' dead' : '')
+      + (isMe ? ' me' : '')
+      + (isTargeted ? ' targeted' : '')
+      + (myVotedThis ? ' vote-target' : '');
+    card.dataset.uid = uid;
+    card.onclick = () => handlePlayerClick(uid, p.alive);
+    card.oncontextmenu = (e) => { e.stopPropagation(); openTagMenu(e, uid); };
 
-      const initial  = nick.charAt(0).toUpperCase();
-      const online   = rp.online !== false;
-      const tagHTML  = tag ? `<span class="pc-tag tag-${tag}">${{red:'🔴 마피아 의심',blue:'🔵 시민 확정',amber:'⚠️ 위험',clear:''}[tag]}</span>` : '';
-      const voteHTML = gs.phase === 'vote' && voteCount > 0
-        ? `<div class="pc-votes">${voteCount}</div>` : '';
+    const initial  = nick.charAt(0).toUpperCase();
+    const isBot    = uid.startsWith('bot_');
+    const tagHTML  = tag ? `<span class="pc-tag tag-${tag}">${{red:'🔴 마피아 의심',blue:'🔵 시민 확정',amber:'⚠️ 위험',clear:''}[tag]}</span>` : '';
+    const voteHTML = gs.phase === 'vote' && voteCount > 0
+      ? `<div class="pc-votes">${voteCount}</div>` : '';
 
-      card.innerHTML = `
-        <div class="pc-top">
-          <div class="pc-avatar">${initial}</div>
-          <div class="pc-info">
-            <div class="pc-name">${nick}${isMe?' <span style="color:var(--green);font-size:9px">YOU</span>':''}</div>
-            <div class="pc-status">
-              <span class="pc-wave ${online?'':'offline'}"></span>
-              <span>${p.alive ? (online?'ONLINE':'OFFLINE') : '☠ DEAD'}</span>
-            </div>
-            ${tagHTML}
+    card.innerHTML = `
+      <div class="pc-top">
+        <div class="pc-avatar">${isBot ? '🤖' : initial}</div>
+        <div class="pc-info">
+          <div class="pc-name">${nick}${isMe?' <span style="color:var(--green);font-size:9px">YOU</span>':''}</div>
+          <div class="pc-status">
+            <span class="pc-wave ${isBot ? '' : 'offline'}"></span>
+            <span>${p.alive ? (isBot ? 'BOT' : 'ONLINE') : '☠ DEAD'}</span>
           </div>
+          ${tagHTML}
         </div>
-        ${voteHTML}`;
+      </div>
+      ${voteHTML}`;
 
-      container.appendChild(card);
-    });
+    container.appendChild(card);
   });
 }
 
@@ -1399,7 +1429,7 @@ async function sendChat() {
 
   await db.ref('chats/' + ROOM_ID).push({
     uid: MY_UID, nickname: MY_NICK, text, channel: ch,
-    timestamp: firebase.database.ServerValue.TIMESTAMP,
+    timestamp: Date.now(),
   });
   input.value = '';
 }
@@ -1454,7 +1484,7 @@ function handleNightResult(r) {
   db.ref('chats/' + ROOM_ID).push({
     uid:'SYSTEM', nickname:'SYSTEM', text, channel:'system',
     warn, success,
-    timestamp: firebase.database.ServerValue.TIMESTAMP,
+    timestamp: Date.now(),
   });
   showSys(text, warn?'warn':(success?'success':''));
 
