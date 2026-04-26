@@ -782,18 +782,28 @@ window.addEventListener('load', async () => {
     if (data.clientUID) renderClientInfo(data.clientUID);
   });
 
-  // 게임 상태 구독
+  // ── 룸 전체 구독 (게임 초기화 감지) ───────────────────
+  db.ref('rooms/' + ROOM_ID).on('value', async snap => {
+    if (!snap.exists()) { location.href = 'lobby.html'; return; }
+    const room = snap.val();
+
+    // 방장이고 status=playing인데 gameState가 없으면 → 게임 초기화
+    if (room.status === 'playing' && !room.gameState && room.host === MY_UID) {
+      showSys('게임 초기화 중...', '');
+      try {
+        await MafiaEngine.GameDB.startGame(db, ROOM_ID);
+      } catch(e) {
+        showSys('초기화 오류: ' + e.message, 'warn');
+      }
+    }
+  });
+
+  // ── 게임 상태 구독 ──────────────────────────────────────
   gameUnsub = db.ref('rooms/' + ROOM_ID + '/gameState');
   gameUnsub.on('value', snap => {
     if (!snap.exists()) return;
     const gs = snap.val();
     gameState = gs;
-
-    // 방장 여부
-    db.ref('rooms/' + ROOM_ID + '/host').get().then(h => {
-      isHost = h.val() === MY_UID;
-      if (isHost) document.getElementById('btn-abort').style.display = '';
-    });
 
     myAlive = gs.assignments?.[MY_UID]?.alive !== false;
     renderPlayers(gs);
@@ -804,8 +814,17 @@ window.addEventListener('load', async () => {
     // 사망 시 ghost 탭 표시
     if (!myAlive) {
       document.getElementById('tab-ghost').style.display = '';
-      switchTab('ghost');
+      if (document.getElementById('tab-ghost').classList.contains('active') === false) {
+        switchTab('ghost');
+      }
     }
+  });
+
+  // ── 방장 여부 구독 (room.host 변경 감지) ────────────────
+  db.ref('rooms/' + ROOM_ID + '/host').on('value', snap => {
+    isHost = snap.val() === MY_UID;
+    const abortBtn = document.getElementById('btn-abort');
+    if (abortBtn) abortBtn.style.display = isHost ? '' : 'none';
   });
 
   // 개인 결과 메시지 구독
@@ -939,7 +958,8 @@ function renderClientInfo(clientUID) {
 
 // ── 플레이어 그리드 렌더 ─────────────────────────────────────
 function renderPlayers(gs) {
-  const players  = Object.values(gs.assignments || {});
+  // ★ entries로 [uid, player] 쌍을 직접 가져옴 (역조회 버그 수정)
+  const playerEntries = Object.entries(gs.assignments || {});
   const voteLog  = gs.voteLog || {};
   const voteTally = {};
   Object.values(voteLog).forEach(t => { voteTally[t] = (voteTally[t]||0)+1; });
@@ -948,16 +968,13 @@ function renderPlayers(gs) {
   container.innerHTML = '';
   setTimeout(() => markBotPlayers(gs), 500);
 
-  const aliveCount = players.filter(p => p.alive).length;
+  const aliveCount = playerEntries.filter(([,p]) => p.alive).length;
   document.getElementById('alive-count').textContent = 'ALIVE: ' + aliveCount;
 
-  // 방 플레이어 목록을 같이 가져와서 닉네임 매핑
   db.ref('rooms/' + ROOM_ID + '/players').get().then(snap => {
     const roomPlayers = snap.val() || {};
 
-    players.forEach(p => {
-      const uid      = Object.keys(gs.assignments).find(k => gs.assignments[k] === p);
-      if (!uid) return;
+    playerEntries.forEach(([uid, p]) => {
       const rp       = roomPlayers[uid] || {};
       const nick     = rp.nickname || uid;
       const isMe     = uid === MY_UID;
@@ -1071,9 +1088,11 @@ function startTimer(endAt, gs) {
     if (left <= 0) {
       clearInterval(timerInterval);
       if (isHost) {
-        // 미제출 봇 처리 후 페이즈 진행
-        await BotEngine.fillMissingActions(db, ROOM_ID);
-        advancePhase(gs);
+        // setInterval은 async 불가 → 별도 async 함수로 처리
+        (async () => {
+          await BotEngine.fillMissingActions(db, ROOM_ID);
+          advancePhase(gs);
+        })();
       }
     }
   }, 200);
@@ -1469,10 +1488,16 @@ function checkGameOver(gs) {
 
   // 전원 직업 공개
   const assigns = gs.assignments;
-  rolesEl.innerHTML = Object.entries(assigns).map(([uid, p]) => {
-    const cls = p.team + '-reveal';
-    return `<div class="rr-item ${cls}"><span class="rr-name">${uid}</span> — ${MafiaEngine.ROLES[p.role]?.nameKo||p.role}</div>`;
-  }).join('');
+  // 닉네임 가져와서 결과 표시
+  db.ref('rooms/' + ROOM_ID + '/players').get().then(snap => {
+    const rp = snap.val() || {};
+    rolesEl.innerHTML = Object.entries(assigns).map(([uid, p]) => {
+      const cls  = p.team + '-reveal';
+      const nick = rp[uid]?.nickname || uid;
+      const isBot = rp[uid]?.isBot ? ' 🤖' : '';
+      return `<div class="rr-item ${cls}"><span class="rr-name">${nick}${isBot}</span> — ${MafiaEngine.ROLES[p.role]?.nameKo||p.role}</div>`;
+    }).join('');
+  });
 
   // 개인 승리자
   if (r.lawyerWin) {
