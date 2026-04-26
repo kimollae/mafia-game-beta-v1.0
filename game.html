@@ -931,7 +931,7 @@ window.addEventListener('load', async () => {
 
   // ── skipVotes 실시간 구독 ──────────────────────────────
   db.ref('rooms/' + ROOM_ID + '/skipVotes').on('value', snap => {
-    if (!gameState) return;
+    if (!gameState || !gameState.assignments) return;
     gameState.skipVotes = snap.val() || {};
     updateSkipUI(gameState);
   });
@@ -1135,14 +1135,37 @@ function handlePlayerClick(uid, alive) {
 }
 
 // ── 페이즈 UI ────────────────────────────────────────────────
+// ── Skip UI 업데이트 ─────────────────────────────────────
+function updateSkipUI(gs) {
+  if (!gs) return;
+  const skipSnap  = gs.skipVotes || {};
+  const skipCount = Object.keys(skipSnap).length;
+  const alive     = gs.assignments
+    ? Object.values(gs.assignments).filter(p => p.alive).length : 1;
+  const need  = Math.ceil(alive / 2) + 1;
+  const pct   = Math.min((skipCount / need) * 100, 100);
+
+  const gauge   = document.getElementById('skip-gauge');
+  const countEl = document.getElementById('skip-count');
+  const needEl  = document.getElementById('skip-need');
+  if (gauge)   gauge.style.width   = pct + '%';
+  if (countEl) countEl.textContent = skipCount;
+  if (needEl)  needEl.textContent  = need;
+
+  // 과반수 달성 시 방장이 페이즈 진행
+  if (skipCount >= need && isHost) {
+    db.ref('rooms/' + ROOM_ID + '/skipVotes').remove();
+    advancePhase(gameState);
+  }
+}
+
 function updatePhaseUI(gs) {
   clearInterval(timerInterval);
   const phaseNameEl = document.getElementById('phase-name');
   const skipWrap    = document.getElementById('skip-wrap');
   const votePanelEl = document.getElementById('vote-panel');
 
-  // 스킵 투표 초기화
-  skipVotes = new Set();
+  // 스킵 투표 초기화 (Set 제거 — Firebase 기반으로 통합)
   updateSkipUI(gs);
 
   if (gs.phase === 'night') {
@@ -1458,7 +1481,7 @@ async function voteSkip() {
 // ── 채팅 ─────────────────────────────────────────────────────
 function subscribeChat() {
   if (chatUnsub) { db.ref('chats/' + ROOM_ID).off('value', chatUnsub); }
-  db.ref('chats/' + ROOM_ID).orderByChild('timestamp').limitToLast(100)
+  db.ref('chats/' + ROOM_ID).limitToLast(100)
     .on('value', snap => {
       const msgs = [];
       snap.forEach(c => msgs.push({ id:c.key, ...c.val() }));
