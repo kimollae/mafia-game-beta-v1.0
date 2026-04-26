@@ -1138,14 +1138,15 @@ function openWaitingRoom(roomId) {
 
 // ── 대기실 렌더링 ────────────────────────────────────────────
 function renderWaitingRoom(room) {
+  // ★ isHost 먼저 선언 후 사용
+  const isHost = room.host === currentUser?.uid;
+
   const allPlayers = Object.values(room.players || {})
     .sort((a,b) => a.joinedAt - b.joinedAt);
   const players = allPlayers.filter(p => p.online !== false || p.isBot);
 
-  // 봇 UI 업데이트
+  // 봇 UI 업데이트 (방장에게만)
   if (isHost) updateBotUI(room.players || {});
-
-  const isHost = room.host === currentUser?.uid;
   const count  = players.length;
 
   document.getElementById('modal-title').textContent =
